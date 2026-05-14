@@ -7,18 +7,49 @@ const storageKeys = {
   backendUrl: 'p42:backend-url'
 };
 
-const sample = {
-  businessUnit: 'Group Technology Risk',
-  geography: 'UAE',
-  supplierName: 'Example AI SaaS',
-  brief: 'Procure a critical AI SaaS supplier that processes personal data, integrates with Azure AD and ServiceNow, and supports finance reporting across the UAE.',
-  documents: [
-    {
-      title: 'Supplier assurance summary',
-      summary: 'SOC 2 summary available. No signed DPA, model-training exclusion, or continuity plan attached.'
-    }
-  ],
-  integrations: ['Azure AD', 'ServiceNow', 'Finance reporting']
+const scenarios = {
+  aiSaas: {
+    businessUnit: 'Group Technology Risk',
+    geography: 'UAE',
+    supplierName: 'Example AI SaaS',
+    brief: 'Procure a critical AI SaaS supplier that processes personal data, integrates with Azure AD and ServiceNow, and supports finance reporting across the UAE.',
+    documents: [
+      {
+        title: 'Supplier assurance summary',
+        summary: 'SOC 2 summary available. No signed DPA, model-training exclusion, or continuity plan attached.'
+      }
+    ],
+    integrations: ['Azure AD', 'ServiceNow', 'Finance reporting'],
+    evidenceQueue: ['SOC 2 summary', 'Azure AD integration note', 'Finance reporting scope']
+  },
+  financeVendor: {
+    businessUnit: 'Group Finance Transformation',
+    geography: 'UAE and KSA',
+    supplierName: 'Treasury Ops Platform',
+    brief: 'Onboard a finance workflow vendor that handles payment approvals, exports ledger data, and requires Microsoft 365 tenant access for automated approvals.',
+    documents: [
+      {
+        title: 'Finance controls summary',
+        summary: 'Payment-control ownership is documented. Missing DPA, exit support, licensing review, and privileged access approval.'
+      }
+    ],
+    integrations: ['Microsoft 365', 'ERP export', 'Payment approval workflow'],
+    evidenceQueue: ['Payment approval matrix', 'ERP export scope', 'Tenant access request']
+  },
+  lowRisk: {
+    businessUnit: 'Corporate Communications',
+    geography: 'UAE',
+    supplierName: 'Brand Asset Library',
+    brief: 'Approve a low-risk brand asset library used by the communications team with no customer data, no production integration, and standard SSO access.',
+    documents: [
+      {
+        title: 'Low-risk supplier summary',
+        summary: 'DPA attached, no AI training on customer data, continuity statement attached, SSO documented, and no finance integration.'
+      }
+    ],
+    integrations: ['SSO'],
+    evidenceQueue: ['DPA', 'Continuity statement', 'SSO setup note']
+  }
 };
 
 const form = document.querySelector('#agentForm');
@@ -30,20 +61,32 @@ const apiMode = document.querySelector('#apiMode');
 const relayUrl = document.querySelector('#relayUrl');
 const backendUrl = document.querySelector('#backendUrl');
 const decisionText = document.querySelector('#decisionText');
+const approvalStatus = document.querySelector('#approvalStatus');
+const approvalButton = document.querySelector('#approvalButton');
 const runtimeText = document.querySelector('#runtimeText');
 const readinessScore = document.querySelector('#readinessScore');
 const evidenceCount = document.querySelector('#evidenceCount');
+const gapCount = document.querySelector('#gapCount');
+const flowProgress = document.querySelector('#flowProgress');
+const stageKicker = document.querySelector('#stageKicker');
+const stageStatus = document.querySelector('#stageStatus');
+const stageOutput = document.querySelector('#stageOutput');
 const domainList = document.querySelector('#domainList');
 const gapList = document.querySelector('#gapList');
 const traceList = document.querySelector('#traceList');
 const readinessList = document.querySelector('#readinessList');
 const specialistList = document.querySelector('#specialistList');
+const artifactPreview = document.querySelector('#artifactPreview');
+const evidenceQueue = document.querySelector('#evidenceQueue');
 const benchmarkSummary = document.querySelector('#benchmarkSummary');
 const deploymentStatus = document.querySelector('#deploymentStatus');
 const readinessJsonLink = document.querySelector('#readinessJsonLink');
 const benchmarksJsonLink = document.querySelector('#benchmarksJsonLink');
 const goldenDemoLink = document.querySelector('#goldenDemoLink');
+const topHealth = document.querySelector('#topHealth');
 let lastRun = null;
+let currentScenarioKey = 'aiSaas';
+let playbackTimers = [];
 
 const agentLabels = {
   runtime_router: 'Runtime Router',
@@ -97,6 +140,15 @@ const readinessCopy = {
     next: 'Record the Watch the Agent Work walkthrough.'
   }
 };
+
+const fallbackStages = [
+  { role: 'Compliance Orchestrator', agent: 'compliance_orchestrator', method: 'load_case', expectedTraceEvent: 'case_loaded' },
+  { role: 'Regulatory Obligation Mapper', agent: 'regulatory_obligation_mapper', method: 'map_obligations', expectedTraceEvent: 'domains_scanned' },
+  { role: 'Evidence Examiner', agent: 'evidence_examiner', method: 'examine_evidence', expectedTraceEvent: 'evidence_mapped' },
+  { role: 'Risk And Control Analyst', agent: 'risk_control_analyst', method: 'recommend_controls', expectedTraceEvent: 'controls_recommended' },
+  { role: 'Responsible AI Reviewer', agent: 'responsible_ai_reviewer', method: 'review_responsible_ai', expectedTraceEvent: 'output_review_completed' },
+  { role: 'Audit Packager', agent: 'audit_packager', method: 'package_audit_brief', expectedTraceEvent: 'output_review_completed' }
+];
 
 function escapeHtml(value = '') {
   return String(value)
@@ -212,8 +264,8 @@ function apiFetch(path, options = {}) {
 }
 
 function statusClass(value = '') {
-  if (/ready|passed|applicable|healthy|ok|configured|captured/i.test(value)) return 'status-ready';
-  if (/conditional|confirmation|review|partial|pending/i.test(value)) return 'status-warning';
+  if (/ready|passed|applicable|healthy|ok|configured|captured|complete/i.test(value)) return 'status-ready';
+  if (/conditional|confirmation|review|partial|pending|queued/i.test(value)) return 'status-warning';
   return 'status-danger';
 }
 
@@ -252,6 +304,50 @@ function downloadJson(filename, payload) {
   URL.revokeObjectURL(url);
 }
 
+function getStages(result) {
+  return result?.orchestration?.flow?.stages?.length ? result.orchestration.flow.stages : fallbackStages;
+}
+
+function clearPlaybackTimers() {
+  playbackTimers.forEach((timer) => window.clearTimeout(timer));
+  playbackTimers = [];
+}
+
+function currentFormPayload() {
+  const data = new FormData(form);
+  const scenario = scenarios[currentScenarioKey];
+  return {
+    supplierName: scenario.supplierName,
+    brief: data.get('brief'),
+    businessUnit: data.get('businessUnit'),
+    geography: data.get('geography'),
+    documents: [{
+      title: 'User supplied evidence summary',
+      summary: data.get('documentSummary')
+    }],
+    integrations: scenario.integrations
+  };
+}
+
+function applyScenario(key) {
+  const scenario = scenarios[key] || scenarios.aiSaas;
+  currentScenarioKey = key;
+  form.elements.brief.value = scenario.brief;
+  form.elements.businessUnit.value = scenario.businessUnit;
+  form.elements.geography.value = scenario.geography;
+  form.elements.documentSummary.value = scenario.documents[0].summary;
+  document.querySelectorAll('[data-scenario]').forEach((button) => {
+    button.classList.toggle('is-active', button.dataset.scenario === key);
+  });
+  renderEvidenceQueue(scenario);
+}
+
+function renderEvidenceQueue(scenario = scenarios[currentScenarioKey]) {
+  evidenceQueue.innerHTML = scenario.evidenceQueue.map((item, index) => `
+    <span><b>E${String(index + 1).padStart(2, '0')}</b>${escapeHtml(item)}</span>
+  `).join('');
+}
+
 function updateJsonLinks() {
   readinessJsonLink.href = apiUrl('/api/readiness');
   benchmarksJsonLink.href = apiUrl('/api/benchmarks');
@@ -266,53 +362,137 @@ function hydrateConfigForm() {
   updateJsonLinks();
 }
 
-function renderRun(result) {
+function stageNarrative(stage, result) {
+  const domains = Array.isArray(result.domains) ? result.domains : [];
+  const gaps = Array.isArray(result.gaps) ? result.gaps : [];
+  const evidenceIds = Array.isArray(result.evidenceIds) ? result.evidenceIds : [];
+  const role = agentLabels[stage.agent] || stage.role || titleCase(stage.id);
+  const narratives = {
+    'Compliance Orchestrator': `Case scoped for ${result.case?.businessUnit || 'the requesting team'} across ${result.case?.geography || 'the selected geography'}.`,
+    'Regulatory Obligation Mapper': `${domains.length} obligation domains mapped with applicability and owner evidence requirements.`,
+    'Evidence Examiner': `${evidenceIds.length} evidence identifiers linked; missing documents remain explicit blockers.`,
+    'Risk And Control Analyst': `${gaps.length} blocking gaps converted into required controls and owner actions.`,
+    'Responsible AI Reviewer': 'Output kept inside a human approval boundary with unsupported certainty removed.',
+    'Audit Packager': 'Decision, trace, evidence IDs, gaps, runtime metadata, and readiness proof packaged for export.'
+  };
+  return narratives[role] || `${role} completed ${humanize(stage.method || 'review')}.`;
+}
+
+function renderRun(result, options = {}) {
+  const stages = getStages(result);
+  const stageIndex = Number.isFinite(options.stageIndex) ? options.stageIndex : stages.length - 1;
+  const activeIndex = Number.isFinite(options.activeIndex) ? options.activeIndex : null;
+  const finalVisible = options.finalVisible !== false;
+
   if (!result.ok) {
     lastRun = result;
     decisionText.textContent = result.message || 'Run blocked';
+    approvalStatus.textContent = 'Case could not be evaluated.';
+    approvalButton.textContent = 'Approval locked';
+    approvalButton.disabled = true;
     runtimeText.textContent = '--';
     readinessScore.textContent = '--';
     evidenceCount.textContent = '--';
+    gapCount.textContent = '--';
     domainList.innerHTML = '';
     gapList.innerHTML = '';
     traceList.innerHTML = '';
     specialistList.innerHTML = '';
+    artifactPreview.innerHTML = '';
+    flowProgress.style.width = '0%';
     return;
   }
 
-  lastRun = result;
+  if (finalVisible) {
+    lastRun = result;
+  }
 
   const domains = Array.isArray(result.domains) ? result.domains : [];
   const gaps = Array.isArray(result.gaps) ? result.gaps : [];
   const trace = Array.isArray(result.trace) ? result.trace : [];
   const evidenceIds = Array.isArray(result.evidenceIds) ? result.evidenceIds : [];
+  const progress = Math.max(0, Math.min(100, Math.round(((stageIndex + 1) / stages.length) * 100)));
+  const currentStage = stages[Math.max(0, Math.min(stages.length - 1, activeIndex ?? stageIndex))];
 
-  decisionText.textContent = result.decision.recommendation;
+  decisionText.textContent = finalVisible ? result.decision.recommendation : 'CrewAI review in progress';
+  approvalStatus.textContent = finalVisible
+    ? 'Human approval remains required before operational use.'
+    : 'Specialists are building the audit pack.';
+  approvalButton.textContent = finalVisible ? 'Human approval required' : 'Review in progress';
+  approvalButton.disabled = true;
   runtimeText.textContent = formatRuntime(result.runtime?.actualRuntime || result.mode || 'unknown');
-  readinessScore.textContent = `${Math.round(result.decision.readinessScore * 100)}%`;
-  evidenceCount.textContent = String(evidenceIds.length);
+  readinessScore.textContent = finalVisible
+    ? `${Math.round(result.decision.readinessScore * 100)}%`
+    : `${Math.max(8, Math.round((progress / 100) * result.decision.readinessScore * 100))}%`;
+  evidenceCount.textContent = stageIndex >= 2 || finalVisible ? String(evidenceIds.length) : 'mapping';
+  gapCount.textContent = stageIndex >= 3 || finalVisible ? String(gaps.length) : '--';
+  flowProgress.style.width = `${progress}%`;
+  stageKicker.textContent = finalVisible ? 'Audit pack ready' : `Stage ${Math.max(1, stageIndex + 1)} of ${stages.length}`;
+  stageStatus.textContent = currentStage ? (agentLabels[currentStage.agent] || currentStage.role || titleCase(currentStage.id)) : 'Ready';
+  stageOutput.textContent = currentStage ? stageNarrative(currentStage, result) : 'Select a scenario or run the golden AI SaaS case.';
 
-  domainList.innerHTML = domains.map((domain) => `
-    <article class="item">
-      <strong>${escapeHtml(domain.label)}</strong>
-      <span class="${statusClass(domain.status)}">${escapeHtml(humanize(domain.status))} - score ${escapeHtml(domain.score)}</span>
-      <p>${escapeHtml(domain.obligations?.[0] || 'Mapped obligation pending evidence review.')}</p>
-    </article>
-  `).join('');
+  renderSpecialists(result, { stageIndex, activeIndex, finalVisible });
+  renderEvidence(result, { stageIndex, finalVisible });
+  renderTrace(trace, stages, { stageIndex, finalVisible });
+  renderArtifactPreview(result, { finalVisible });
+}
 
-  gapList.innerHTML = gaps.length
+function renderSpecialists(result, options = {}) {
+  const stages = getStages(result);
+  const stageIndex = Number.isFinite(options.stageIndex) ? options.stageIndex : stages.length - 1;
+  const activeIndex = Number.isFinite(options.activeIndex) ? options.activeIndex : null;
+
+  specialistList.innerHTML = stages.map((stage, index) => {
+    const complete = index <= stageIndex;
+    const active = index === activeIndex && !options.finalVisible;
+    const status = active ? 'running' : complete ? 'complete' : 'queued';
+    const role = agentLabels[stage.agent] || stage.role || titleCase(stage.agent || stage.id);
+    return `
+      <article class="specialist ${complete ? 'is-complete' : ''} ${active ? 'is-active' : ''}">
+        <span>${escapeHtml(status)}</span>
+        <strong>${escapeHtml(role)}</strong>
+        <p>${escapeHtml(stageNarrative(stage, result))}</p>
+      </article>
+    `;
+  }).join('');
+}
+
+function renderEvidence(result, options = {}) {
+  const domains = Array.isArray(result.domains) ? result.domains : [];
+  const gaps = Array.isArray(result.gaps) ? result.gaps : [];
+  const showDomains = options.finalVisible || options.stageIndex >= 1;
+  const showGaps = options.finalVisible || options.stageIndex >= 3;
+
+  domainList.innerHTML = showDomains
+    ? domains.map((domain) => `
+      <article class="domain-row">
+        <div>
+          <strong>${escapeHtml(domain.label)}</strong>
+          <p>${escapeHtml(domain.obligations?.[0] || 'Mapped obligation pending evidence review.')}</p>
+        </div>
+        <span class="${statusClass(domain.status)}">${escapeHtml(humanize(domain.status))} · ${escapeHtml(domain.score)}</span>
+      </article>
+    `).join('')
+    : '<article class="empty-row">Obligation map appears after the regulatory mapper completes.</article>';
+
+  gapList.innerHTML = showGaps
     ? gaps.map((gap) => `
-      <article class="item">
-        <strong>${escapeHtml(gap.gap)}</strong>
+      <article class="gap-row">
         <span class="${gap.severity === 'high' ? 'status-danger' : 'status-warning'}">${escapeHtml(gap.severity)}</span>
+        <strong>${escapeHtml(gap.gap)}</strong>
         <p>${escapeHtml(gap.action)}</p>
       </article>
     `).join('')
-    : '<article class="item"><strong>No blocking gaps detected.</strong><p>Human approval is still required before relying on the decision.</p></article>';
+    : '<article class="empty-row">Blocking gaps appear after control analysis completes.</article>';
+}
 
-  renderSpecialists(result);
+function renderTrace(trace, stages, options = {}) {
+  const visibleEventTypes = new Set(stages.slice(0, options.finalVisible ? stages.length : options.stageIndex + 1).map((stage) => stage.expectedTraceEvent));
+  const visibleTrace = options.finalVisible
+    ? trace
+    : trace.filter((event) => event.agent === 'runtime_router' || visibleEventTypes.has(event.eventType));
 
-  traceList.innerHTML = trace.map((event) => `
+  traceList.innerHTML = visibleTrace.map((event) => `
     <li>
       <div>
         <strong>${escapeHtml(agentLabels[event.agent] || titleCase(event.agent))}</strong>
@@ -322,56 +502,74 @@ function renderRun(result) {
   `).join('');
 }
 
-function renderSpecialists(result) {
-  const stages = result.orchestration?.flow?.stages || [];
-  const traceTypes = new Set((result.trace || []).map((event) => event.eventType));
-  const fallbackStages = [
-    { role: 'Compliance Orchestrator', method: 'load_case', expectedTraceEvent: 'case_loaded' },
-    { role: 'Regulatory Obligation Mapper', method: 'map_obligations', expectedTraceEvent: 'domains_scanned' },
-    { role: 'Evidence Examiner', method: 'examine_evidence', expectedTraceEvent: 'evidence_mapped' },
-    { role: 'Risk And Control Analyst', method: 'recommend_controls', expectedTraceEvent: 'controls_recommended' },
-    { role: 'Responsible AI Reviewer', method: 'review_responsible_ai', expectedTraceEvent: 'output_review_completed' },
-    { role: 'Audit Packager', method: 'package_audit_brief', expectedTraceEvent: 'output_review_completed' }
-  ];
-  const items = (stages.length ? stages : fallbackStages).map((stage) => {
-    const complete = traceTypes.has(stage.expectedTraceEvent);
-    return `
-      <article class="specialist ${complete ? 'is-complete' : ''}">
-        <span>${escapeHtml(complete ? 'complete' : 'queued')}</span>
-        <strong>${escapeHtml(agentLabels[stage.agent] || stage.role || titleCase(stage.agent || stage.id))}</strong>
-        <p>${escapeHtml(humanize(stage.method || stage.id))}</p>
-      </article>
-    `;
-  }).join('');
-
-  const llm = result.orchestration?.liveLlm;
-  const llmNote = llm?.requested
-    ? `${llm.outputAvailable ? 'Live LLM specialist output attached' : 'Live LLM requested; deterministic guardrail fallback active'}`
-    : 'Live LLM calls are off; Flow orchestration and deterministic guardrails are active';
-
-  specialistList.innerHTML = `
-    <div class="runtime-note">
-      <strong>${escapeHtml(formatRuntime(result.runtime?.actualRuntime || result.mode || 'runtime'))}</strong>
-      <p>${escapeHtml(llmNote)}</p>
+function renderArtifactPreview(result, options = {}) {
+  const domains = Array.isArray(result.domains) ? result.domains : [];
+  const gaps = Array.isArray(result.gaps) ? result.gaps : [];
+  const evidenceIds = Array.isArray(result.evidenceIds) ? result.evidenceIds : [];
+  const ready = options.finalVisible;
+  artifactPreview.innerHTML = `
+    <div class="artifact-header">
+      <span class="eyebrow">${ready ? 'export ready' : 'assembling'}</span>
+      <strong>${escapeHtml(result.case?.caseId || 'case pending')}</strong>
     </div>
-    ${items}
+    <div class="artifact-grid">
+      <span>Decision</span><b>${escapeHtml(ready ? result.decision.recommendation : 'pending final review')}</b>
+      <span>Domains</span><b>${escapeHtml(domains.length)}</b>
+      <span>Gaps</span><b>${escapeHtml(gaps.length)}</b>
+      <span>Evidence IDs</span><b>${escapeHtml(evidenceIds.length)}</b>
+      <span>Runtime</span><b>${escapeHtml(formatRuntime(result.runtime?.actualRuntime || result.mode || 'unknown'))}</b>
+    </div>
+    <pre>{
+  "humanApprovalRequired": true,
+  "deterministicGuardrail": true,
+  "exportStatus": "${ready ? 'ready' : 'building'}"
+}</pre>
   `;
 }
 
-async function runAgent(payload) {
-  decisionText.textContent = 'Running...';
+function playResult(result) {
+  clearPlaybackTimers();
+  const stages = getStages(result);
+  renderRun(result, { stageIndex: -1, activeIndex: 0, finalVisible: false });
+  stages.forEach((stage, index) => {
+    playbackTimers.push(window.setTimeout(() => {
+      renderRun(result, { stageIndex: index, activeIndex: index, finalVisible: false });
+    }, 420 + (index * 520)));
+  });
+  playbackTimers.push(window.setTimeout(() => {
+    renderRun(result, { stageIndex: stages.length - 1, finalVisible: true });
+  }, 620 + (stages.length * 520)));
+}
+
+async function runAgent(payload, options = {}) {
+  clearPlaybackTimers();
+  sampleRun.disabled = true;
+  sampleRun.textContent = 'Running';
+  decisionText.textContent = 'CrewAI review in progress';
+  approvalStatus.textContent = 'Submitting case to the agent runtime.';
+  stageKicker.textContent = 'Dispatching';
+  stageStatus.textContent = 'Runtime Router';
+  stageOutput.textContent = 'Selecting the configured orchestration path.';
+  flowProgress.style.width = '4%';
   try {
     const result = await apiFetch('/api/agent/run', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    renderRun(result);
+    if (options.playback) {
+      playResult(result);
+    } else {
+      renderRun(result);
+    }
   } catch (error) {
     renderRun({
       ok: false,
       message: error instanceof Error ? error.message : 'Run failed'
     });
+  } finally {
+    sampleRun.disabled = false;
+    sampleRun.textContent = 'Watch demo';
   }
 }
 
@@ -381,8 +579,8 @@ async function loadReadiness() {
     const inventory = readiness.submissionReadiness || {};
     readinessList.innerHTML = Object.entries(inventory).map(([key, value]) => `
       <article class="hardening-item">
-        <span>${escapeHtml(humanize(value))}</span>
-        <strong>${escapeHtml(readinessCopy[key]?.label || key.replace(/([A-Z])/g, ' $1').toLowerCase())}</strong>
+        <span class="${statusClass(value)}">${escapeHtml(humanize(value))}</span>
+        <strong>${escapeHtml(readinessCopy[key]?.label || titleCase(key.replace(/([A-Z])/g, ' $1')))}</strong>
         <p>${escapeHtml(readinessCopy[key]?.proof || 'Current proof recorded in the readiness endpoint.')}</p>
         <small>${escapeHtml(readinessCopy[key]?.next || 'Track in the production hardening plan.')}</small>
       </article>
@@ -402,17 +600,18 @@ async function loadBenchmarks() {
   try {
     const report = await apiFetch('/api/benchmarks');
     benchmarkSummary.innerHTML = `
-      <article class="item">
-        <strong>${escapeHtml(report.summary.passed)}/${escapeHtml(report.summary.cases)} cases passed</strong>
-        <span class="${report.summary.failed ? 'status-danger' : 'status-ready'}">${Math.round(report.summary.passRate * 100)}% pass rate</span>
-        <p>p95 local deterministic duration: ${escapeHtml(report.summary.p95DurationMs)} ms</p>
+      <article>
+        <span class="eyebrow">Eval suite</span>
+        <strong>${escapeHtml(report.summary.passed)}/${escapeHtml(report.summary.cases)} passed</strong>
+        <p>${Math.round(report.summary.passRate * 100)}% pass rate · p95 ${escapeHtml(report.summary.p95DurationMs)} ms</p>
       </article>
     `;
   } catch (error) {
     benchmarkSummary.innerHTML = `
-      <article class="item">
-        <strong>Benchmark API unavailable</strong>
-        <span class="status-danger">${escapeHtml(error instanceof Error ? error.message : 'unavailable')}</span>
+      <article>
+        <span class="status-danger">unavailable</span>
+        <strong>Benchmark API</strong>
+        <p>${escapeHtml(error instanceof Error ? error.message : 'unavailable')}</p>
       </article>
     `;
   }
@@ -429,6 +628,9 @@ function renderStatusCards(results) {
       <p>${escapeHtml(result.detail)}</p>
     </article>
   `).join('');
+  const unhealthy = results.some((result) => result.status === 'unavailable');
+  topHealth.textContent = unhealthy ? 'degraded' : 'live';
+  topHealth.className = unhealthy ? 'status-warning' : 'status-ready';
 }
 
 async function loadDeploymentStatus() {
@@ -487,18 +689,16 @@ async function loadDeploymentStatus() {
   renderStatusCards(results);
 }
 
+document.querySelectorAll('[data-scenario]').forEach((button) => {
+  button.addEventListener('click', () => {
+    applyScenario(button.dataset.scenario);
+    runAgent(currentFormPayload(), { playback: true });
+  });
+});
+
 form.addEventListener('submit', (event) => {
   event.preventDefault();
-  const data = new FormData(form);
-  runAgent({
-    brief: data.get('brief'),
-    businessUnit: data.get('businessUnit'),
-    geography: data.get('geography'),
-    documents: [{
-      title: 'User supplied evidence summary',
-      summary: data.get('documentSummary')
-    }]
-  });
+  runAgent(currentFormPayload(), { playback: true });
 });
 
 runtimeConfig.addEventListener('submit', (event) => {
@@ -521,12 +721,12 @@ resetConfig.addEventListener('click', () => {
   loadBenchmarks();
 });
 
-sampleRun.addEventListener('click', () => runAgent(sample));
+sampleRun.addEventListener('click', () => runAgent(currentFormPayload(), { playback: true }));
 exportRun.addEventListener('click', () => {
   if (!lastRun?.ok) {
     exportRun.textContent = 'Run demo first';
     window.setTimeout(() => {
-      exportRun.textContent = 'Export audit pack';
+      exportRun.textContent = 'Export pack';
     }, 1400);
     return;
   }
@@ -540,10 +740,10 @@ exportRun.addEventListener('click', () => {
 function animateNetwork() {
   const canvas = document.querySelector('#networkCanvas');
   const context = canvas.getContext('2d');
-  const nodes = Array.from({ length: 38 }, (_, index) => ({
+  const nodes = Array.from({ length: 46 }, (_, index) => ({
     x: Math.random(),
     y: Math.random(),
-    r: index % 7 === 0 ? 2.8 : 1.6,
+    r: index % 9 === 0 ? 2.4 : 1.3,
     phase: Math.random() * Math.PI * 2
   }));
 
@@ -556,11 +756,11 @@ function animateNetwork() {
     const width = canvas.width;
     const height = canvas.height;
     context.clearRect(0, 0, width, height);
-    context.strokeStyle = 'rgba(18, 214, 161, 0.12)';
-    context.fillStyle = 'rgba(18, 214, 161, 0.42)';
+    context.strokeStyle = 'rgba(18, 214, 161, 0.1)';
+    context.fillStyle = 'rgba(18, 214, 161, 0.34)';
     const points = nodes.map((node) => ({
-      x: (node.x + Math.sin(time / 9000 + node.phase) * 0.018) * width,
-      y: (node.y + Math.cos(time / 11000 + node.phase) * 0.018) * height,
+      x: (node.x + Math.sin(time / 9000 + node.phase) * 0.014) * width,
+      y: (node.y + Math.cos(time / 11000 + node.phase) * 0.014) * height,
       r: node.r * window.devicePixelRatio
     }));
     for (let index = 0; index < points.length; index += 1) {
@@ -568,8 +768,8 @@ function animateNetwork() {
         const left = points[index];
         const right = points[next];
         const distance = Math.hypot(left.x - right.x, left.y - right.y);
-        if (distance < 190 * window.devicePixelRatio) {
-          context.globalAlpha = 1 - distance / (190 * window.devicePixelRatio);
+        if (distance < 170 * window.devicePixelRatio) {
+          context.globalAlpha = 1 - distance / (170 * window.devicePixelRatio);
           context.beginPath();
           context.moveTo(left.x, left.y);
           context.lineTo(right.x, right.y);
@@ -591,9 +791,10 @@ function animateNetwork() {
   draw();
 }
 
+applyScenario(currentScenarioKey);
 hydrateConfigForm();
 loadDeploymentStatus();
 loadReadiness();
 loadBenchmarks();
-runAgent(sample);
+runAgent(currentFormPayload(), { playback: true });
 animateNetwork();

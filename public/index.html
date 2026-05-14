@@ -10,147 +10,205 @@
   <body>
     <canvas id="networkCanvas" aria-hidden="true"></canvas>
     <header class="topbar">
-      <div>
+      <div class="brand">
         <span class="brand-mark">P42</span>
-        <span class="brand-name">Parallax42 Compliance Intelligence Agent</span>
+        <div>
+          <span class="brand-name">Parallax42</span>
+          <span class="brand-subtitle">Compliance Intelligence Agent</span>
+        </div>
       </div>
       <nav aria-label="Primary">
-        <a href="#run">Demo</a>
-        <a href="#workflow">CrewAI</a>
+        <a href="#run">Workbench</a>
         <a href="#evidence">Evidence</a>
+        <a href="#audit">Audit Pack</a>
         <a href="#hardening">Hardening</a>
       </nav>
+      <div class="topbar-status">
+        <span id="topHealth">checking</span>
+      </div>
     </header>
 
-    <main>
-      <section class="workspace" id="run">
-        <div class="intro">
-          <p class="eyebrow">Reviewer demo cockpit</p>
-          <h1>Parallax42 Compliance Intelligence Agent</h1>
-          <p class="lede">Run the golden AI SaaS case, inspect CrewAI Flow orchestration, and export the audit-ready decision pack.</p>
-          <div class="actions">
-            <button id="sampleRun" type="button">Run golden demo</button>
-            <button id="exportRun" type="button" class="secondary-button">Export audit pack</button>
-            <a id="readinessJsonLink" href="api/readiness">Readiness</a>
-            <a id="benchmarksJsonLink" href="api/benchmarks">Benchmarks</a>
+    <main class="workbench">
+      <section class="command-center" id="run">
+        <aside class="case-panel pane">
+          <div class="pane-header">
+            <span class="eyebrow">Case intake</span>
+            <strong>Golden review file</strong>
+          </div>
+
+          <div class="scenario-switcher" aria-label="Case scenarios">
+            <button type="button" class="scenario-button is-active" data-scenario="aiSaas">AI SaaS</button>
+            <button type="button" class="scenario-button" data-scenario="financeVendor">Finance vendor</button>
+            <button type="button" class="scenario-button" data-scenario="lowRisk">Low risk</button>
+          </div>
+
+          <form id="agentForm" class="case-form">
+            <label>
+              Compliance brief
+              <textarea name="brief" rows="7">Procure a critical AI SaaS supplier that processes personal data, integrates with Azure AD and ServiceNow, and supports finance reporting across the UAE.</textarea>
+            </label>
+            <div class="field-grid">
+              <label>
+                Business unit
+                <input name="businessUnit" value="Group Technology Risk" />
+              </label>
+              <label>
+                Geography
+                <input name="geography" value="UAE" />
+              </label>
+            </div>
+            <label>
+              Evidence summary
+              <textarea name="documentSummary" rows="4">SOC 2 summary available. No signed DPA, model-training exclusion, or continuity plan attached.</textarea>
+            </label>
+            <div id="evidenceQueue" class="evidence-queue" aria-live="polite"></div>
+            <button type="submit" class="primary-action">Run case</button>
+          </form>
+        </aside>
+
+        <section class="runway pane" id="workflow">
+          <div class="runway-top">
+            <div>
+              <span class="eyebrow">CrewAI Flow</span>
+              <h1>Watch the agent work</h1>
+              <p>Specialists map obligations, inspect evidence, recommend controls, and package the approval file under a deterministic guardrail.</p>
+            </div>
+            <div class="run-actions">
+              <button id="sampleRun" type="button" class="primary-action">Watch demo</button>
+              <button id="exportRun" type="button" class="secondary-button">Export pack</button>
+            </div>
+          </div>
+
+          <div class="run-progress" aria-hidden="true">
+            <span id="flowProgress"></span>
+          </div>
+
+          <div class="stage-console">
+            <div>
+              <span id="stageKicker" class="eyebrow">Ready</span>
+              <strong id="stageStatus">Awaiting run</strong>
+            </div>
+            <p id="stageOutput">Select a scenario or run the golden AI SaaS case.</p>
+          </div>
+
+          <div id="specialistList" class="specialist-list" aria-live="polite"></div>
+
+          <div class="trace-drawer">
+            <div class="section-heading">
+              <span class="eyebrow">Audit trail</span>
+              <h2>Run trace</h2>
+            </div>
+            <ol id="traceList" class="trace"></ol>
+          </div>
+        </section>
+
+        <aside class="decision-rail pane">
+          <div class="decision-card">
+            <span class="eyebrow">Decision</span>
+            <strong id="decisionText">Waiting for run</strong>
+            <p id="approvalStatus">Human approval gate is locked until the audit pack is complete.</p>
+          </div>
+
+          <div class="metric-stack" aria-live="polite">
+            <div>
+              <span>Runtime</span>
+              <strong id="runtimeText">--</strong>
+            </div>
+            <div>
+              <span>Readiness</span>
+              <strong id="readinessScore">--</strong>
+            </div>
+            <div>
+              <span>Evidence IDs</span>
+              <strong id="evidenceCount">--</strong>
+            </div>
+            <div>
+              <span>Blocking gaps</span>
+              <strong id="gapCount">--</strong>
+            </div>
+          </div>
+
+          <div class="approval-actions">
+            <button id="approvalButton" type="button" class="secondary-button" disabled>Approval locked</button>
             <a id="goldenDemoLink" href="api/demo/golden">Golden JSON</a>
           </div>
-        </div>
 
-        <form id="agentForm" class="run-panel">
-          <label>
-            Compliance brief
-            <textarea name="brief" rows="6">Procure a critical AI SaaS supplier that processes personal data, integrates with Azure AD and ServiceNow, and supports finance reporting across the UAE.</textarea>
-          </label>
-          <div class="grid">
-            <label>
-              Business unit
-              <input name="businessUnit" value="Group Technology Risk" />
-            </label>
-            <label>
-              Geography
-              <input name="geography" value="UAE" />
-            </label>
+          <div class="decision-links">
+            <a id="readinessJsonLink" href="api/readiness">Readiness JSON</a>
+            <a id="benchmarksJsonLink" href="api/benchmarks">Benchmarks</a>
           </div>
-          <label>
-            Evidence summary
-            <textarea name="documentSummary" rows="3">SOC 2 summary available. No signed DPA, model-training exclusion, or continuity plan attached.</textarea>
-          </label>
-          <button type="submit">Run agent</button>
-        </form>
+        </aside>
       </section>
 
-      <section class="decision-band" aria-live="polite">
-        <div>
-          <span class="label">Decision</span>
-          <strong id="decisionText">Waiting for run</strong>
+      <section class="evidence-board" id="evidence">
+        <div class="section-heading">
+          <span class="eyebrow">Evidence graph</span>
+          <h2>Obligations, gaps, and controls</h2>
         </div>
-        <div>
-          <span class="label">Runtime</span>
-          <strong id="runtimeText">--</strong>
-        </div>
-        <div>
-          <span class="label">Readiness</span>
-          <strong id="readinessScore">--</strong>
-        </div>
-        <div>
-          <span class="label">Evidence IDs</span>
-          <strong id="evidenceCount">--</strong>
+        <div class="evidence-layout">
+          <div>
+            <div class="board-label">Domain coverage</div>
+            <div id="domainList" class="domain-matrix"></div>
+          </div>
+          <div>
+            <div class="board-label">Blocking gaps</div>
+            <div id="gapList" class="gap-stack"></div>
+          </div>
         </div>
       </section>
 
-      <section class="status-panel" id="deployment">
-        <div>
-          <p class="eyebrow">Live proof</p>
-          <h2>Deployment health</h2>
-          <p>API relay, Parallax42 backend, and Compass gateway are checked from the running cockpit.</p>
+      <section class="audit-section" id="audit">
+        <div class="section-heading">
+          <span class="eyebrow">Submission pack</span>
+          <h2>Artifacts a reviewer can inspect</h2>
         </div>
-        <div id="deploymentStatus" class="status-list" aria-live="polite"></div>
-        <details class="advanced-config">
-          <summary>Advanced runtime settings</summary>
-          <form id="runtimeConfig" class="config-panel">
-            <label>
-              API mode
-              <select name="apiMode" id="apiMode">
-                <option value="auto">Auto</option>
-                <option value="local">Local</option>
-                <option value="relay">Vercel relay</option>
-                <option value="live">Live backend focus</option>
-              </select>
-            </label>
-            <label>
-              Vercel relay URL
-              <input name="relayUrl" id="relayUrl" autocomplete="off" />
-            </label>
-            <label>
-              Parallax42 backend URL
-              <input name="backendUrl" id="backendUrl" autocomplete="off" />
-            </label>
-            <div class="form-actions">
-              <button type="submit">Save runtime</button>
-              <button type="button" id="resetConfig" class="secondary-button">Reset</button>
-            </div>
-          </form>
-        </details>
-      </section>
-
-      <section class="workflow-section" id="workflow">
-        <div>
-          <p class="eyebrow">CrewAI Flow</p>
-          <h2>Specialist review path</h2>
-          <p>Six role-specific agents are represented in the orchestration contract. The deterministic decision engine remains the approval guardrail until live LLM eval gates are added.</p>
-        </div>
-        <div id="specialistList" class="specialist-list" aria-live="polite"></div>
-      </section>
-
-      <section class="split" id="evidence">
-        <div>
-          <h2>Domain Scan</h2>
-          <div id="domainList" class="list"></div>
-        </div>
-        <div>
-          <h2>Blocking Gaps</h2>
-          <div id="gapList" class="list"></div>
+        <div class="artifact-layout">
+          <div id="artifactPreview" class="artifact-preview"></div>
+          <div>
+            <div class="board-label">Live services</div>
+            <div id="deploymentStatus" class="status-list" aria-live="polite"></div>
+            <details class="advanced-config">
+              <summary>Advanced runtime settings</summary>
+              <form id="runtimeConfig" class="config-panel">
+                <label>
+                  API mode
+                  <select name="apiMode" id="apiMode">
+                    <option value="auto">Auto</option>
+                    <option value="local">Local</option>
+                    <option value="relay">Vercel relay</option>
+                    <option value="live">Live backend focus</option>
+                  </select>
+                </label>
+                <label>
+                  Vercel relay URL
+                  <input name="relayUrl" id="relayUrl" autocomplete="off" />
+                </label>
+                <label>
+                  Parallax42 backend URL
+                  <input name="backendUrl" id="backendUrl" autocomplete="off" />
+                </label>
+                <div class="form-actions">
+                  <button type="submit">Save runtime</button>
+                  <button type="button" id="resetConfig" class="secondary-button">Reset</button>
+                </div>
+              </form>
+            </details>
+          </div>
         </div>
       </section>
 
-      <section class="trace-section">
-        <h2>Audit Trace</h2>
-        <ol id="traceList" class="trace"></ol>
-      </section>
-
-      <section class="readiness" id="hardening">
-        <div>
-          <p class="eyebrow">Production hardening</p>
-          <h2>Submission readiness track</h2>
-          <p>Current proof is separated from remaining enterprise authorization work.</p>
+      <section class="hardening-section" id="hardening">
+        <div class="section-heading">
+          <span class="eyebrow">Production hardening</span>
+          <h2>Readiness track</h2>
         </div>
-        <div id="readinessList" class="hardening-list"></div>
-      </section>
-
-      <section class="trace-section">
-        <h2>Local Benchmark</h2>
-        <div id="benchmarkSummary" class="list"></div>
+        <div class="hardening-layout">
+          <div id="readinessList" class="hardening-list"></div>
+          <div>
+            <div class="board-label">Local benchmark</div>
+            <div id="benchmarkSummary" class="benchmark-panel"></div>
+          </div>
+        </div>
       </section>
     </main>
 
