@@ -35,6 +35,7 @@ Linked live assets already in place:
 - Parallax42 demo UI: `https://slackspac3.github.io/Parallax42/`
 - Parallax42 FastAPI backend: `https://api.parallax42.bhavukarora.com/health`
 - Compass gateway: `https://parallax42-compass-gateway.vercel.app/api/health`
+- Compliance Intelligence Agent API: `https://parallax42-compliance-intelligence.vercel.app`
 
 ## Run Locally
 
