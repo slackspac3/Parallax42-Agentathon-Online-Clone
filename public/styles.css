@@ -190,10 +190,58 @@ nav a {
   min-height: calc(100svh - 118px);
   display: grid;
   grid-template-columns: minmax(280px, 330px) minmax(480px, 1fr) minmax(280px, 330px);
+  grid-template-rows: auto 1fr;
   gap: 1px;
   border: 1px solid var(--line);
   background: var(--line);
   box-shadow: 0 24px 80px var(--shadow);
+}
+
+.mode-tabs {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  background: var(--line);
+}
+
+.mode-tab {
+  min-height: 72px;
+  display: grid;
+  place-items: center start;
+  gap: 5px;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  background: rgba(5, 15, 13, 0.9);
+  color: var(--muted);
+  text-align: left;
+}
+
+.mode-tab span,
+.mode-tab small {
+  pointer-events: none;
+}
+
+.mode-tab span {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.mode-tab small {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 720;
+}
+
+.mode-tab.is-active {
+  border-bottom-color: var(--accent);
+  background: linear-gradient(180deg, rgba(25, 214, 165, 0.16), rgba(5, 15, 13, 0.94));
+  color: var(--text);
+}
+
+body[data-run-mode="demo"] .mode-live-only,
+body[data-run-mode="live"] .mode-demo-only {
+  display: none;
 }
 
 .pane {
@@ -224,6 +272,16 @@ nav a {
 .pane-header strong,
 .section-heading h2 {
   font-size: 20px;
+}
+
+.mode-note {
+  margin-top: 18px;
+  padding: 12px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .eyebrow,

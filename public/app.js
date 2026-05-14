@@ -56,10 +56,16 @@ const form = document.querySelector('#agentForm');
 const runtimeConfig = document.querySelector('#runtimeConfig');
 const sampleRun = document.querySelector('#sampleRun');
 const exportRun = document.querySelector('#exportRun');
+const formRunButton = document.querySelector('#formRunButton');
 const resetConfig = document.querySelector('#resetConfig');
 const apiMode = document.querySelector('#apiMode');
 const relayUrl = document.querySelector('#relayUrl');
 const backendUrl = document.querySelector('#backendUrl');
+const runModeButtons = document.querySelectorAll('[data-run-mode]');
+const casePanelEyebrow = document.querySelector('#casePanelEyebrow');
+const casePanelTitle = document.querySelector('#casePanelTitle');
+const runwayTitle = document.querySelector('#runwayTitle');
+const runwayDescription = document.querySelector('#runwayDescription');
 const decisionText = document.querySelector('#decisionText');
 const approvalStatus = document.querySelector('#approvalStatus');
 const approvalButton = document.querySelector('#approvalButton');
@@ -89,9 +95,37 @@ const benchmarksJsonLink = document.querySelector('#benchmarksJsonLink');
 const goldenDemoLink = document.querySelector('#goldenDemoLink');
 const topHealth = document.querySelector('#topHealth');
 let lastRun = null;
+const lastRuns = {
+  demo: null,
+  live: null
+};
+let activeRunMode = 'demo';
 let currentScenarioKey = 'aiSaas';
 let playbackTimers = [];
 let uploadedEvidence = [];
+
+const runModeCopy = {
+  demo: {
+    caseEyebrow: 'Demo workspace',
+    caseTitle: 'Golden review file',
+    runwayTitle: 'Watch the agent work',
+    runwayDescription: 'Preset scenarios replay the G42 submission story with deterministic evidence and trace output.',
+    runButton: 'Run demo',
+    actionButton: 'Watch demo',
+    waitingDecision: 'Demo not started',
+    waitingApproval: 'Choose a preset case and run the guided replay.'
+  },
+  live: {
+    caseEyebrow: 'Live workspace',
+    caseTitle: 'Compliance intake',
+    runwayTitle: 'Run a live case',
+    runwayDescription: 'Submit the edited intake and uploaded evidence to the configured CrewAI runtime.',
+    runButton: 'Run live case',
+    actionButton: 'Run live',
+    waitingDecision: 'Live run not started',
+    waitingApproval: 'Attach evidence or edit the intake, then run the live case.'
+  }
+};
 
 const agentLabels = {
   runtime_router: 'Runtime Router',
@@ -409,8 +443,11 @@ async function ingestEvidenceFiles(files = []) {
     }
     uploadedEvidence = [...uploadedEvidence, ...extracted].slice(0, 12);
     evidenceIngestionStatus.textContent = `${uploadedEvidence.length} uploaded evidence file${uploadedEvidence.length === 1 ? '' : 's'} attached to next run.`;
+    if (activeRunMode !== 'live') {
+      setRunMode('live', { skipRender: true });
+    }
     renderEvidenceQueue();
-    runAgent(currentFormPayload(), { playback: true });
+    runAgent(currentFormPayload(), { playback: true, mode: 'live' });
   } catch (error) {
     evidenceIngestionStatus.textContent = error instanceof Error ? error.message : 'Evidence extraction failed.';
   } finally {
@@ -425,6 +462,67 @@ function getStages(result) {
 function clearPlaybackTimers() {
   playbackTimers.forEach((timer) => window.clearTimeout(timer));
   playbackTimers = [];
+}
+
+function renderModeIdle(mode = activeRunMode) {
+  const copy = runModeCopy[mode] || runModeCopy.demo;
+  lastRun = lastRuns[mode];
+  if (lastRun?.ok) {
+    renderRun(lastRun);
+    return;
+  }
+  decisionText.textContent = copy.waitingDecision;
+  approvalStatus.textContent = copy.waitingApproval;
+  approvalButton.textContent = 'Approval locked';
+  approvalButton.disabled = true;
+  runtimeText.textContent = '--';
+  readinessScore.textContent = '--';
+  evidenceCount.textContent = mode === 'live' && uploadedEvidence.length ? String(uploadedEvidence.length) : '--';
+  gapCount.textContent = '--';
+  flowProgress.style.width = '0%';
+  stageKicker.textContent = mode === 'demo' ? 'Demo ready' : 'Live ready';
+  stageStatus.textContent = mode === 'demo' ? 'Awaiting replay' : 'Awaiting intake run';
+  stageOutput.textContent = mode === 'demo'
+    ? 'Run a packaged scenario to inspect the agent trace and audit pack.'
+    : 'Upload evidence or edit the live intake, then submit it to the configured runtime.';
+  domainList.innerHTML = '<article class="empty-row">Domain coverage appears after the run starts.</article>';
+  gapList.innerHTML = '<article class="empty-row">Blocking gaps appear after control analysis completes.</article>';
+  traceList.innerHTML = '';
+  specialistList.innerHTML = '';
+  citationList.innerHTML = '<article class="empty-row">Citations appear after evidence is mapped.</article>';
+  artifactPreview.innerHTML = `
+    <div class="artifact-header">
+      <span class="eyebrow">waiting</span>
+      <strong>${escapeHtml(mode === 'demo' ? 'demo replay' : 'live case')}</strong>
+    </div>
+    <pre>{
+  "mode": "${escapeHtml(mode)}",
+  "runStarted": false,
+  "humanApprovalRequired": true
+}</pre>
+  `;
+}
+
+function setRunMode(mode = 'demo', options = {}) {
+  activeRunMode = mode === 'live' ? 'live' : 'demo';
+  const copy = runModeCopy[activeRunMode];
+  document.body.dataset.runMode = activeRunMode;
+  runModeButtons.forEach((button) => {
+    const selected = button.dataset.runMode === activeRunMode;
+    button.classList.toggle('is-active', selected);
+    button.setAttribute('aria-selected', String(selected));
+  });
+  casePanelEyebrow.textContent = copy.caseEyebrow;
+  casePanelTitle.textContent = copy.caseTitle;
+  runwayTitle.textContent = copy.runwayTitle;
+  runwayDescription.textContent = copy.runwayDescription;
+  formRunButton.textContent = copy.runButton;
+  sampleRun.textContent = copy.actionButton;
+  renderEvidenceQueue();
+  if (!options.skipRender) {
+    clearPlaybackTimers();
+    renderModeIdle(activeRunMode);
+  }
 }
 
 function currentFormPayload() {
@@ -444,7 +542,7 @@ function currentFormPayload() {
     brief: data.get('brief'),
     businessUnit: data.get('businessUnit'),
     geography: data.get('geography'),
-    documents: [manualDocument, ...uploadedEvidence],
+    documents: activeRunMode === 'live' ? [manualDocument, ...uploadedEvidence] : [manualDocument],
     integrations: scenario.integrations
   };
 }
@@ -469,7 +567,11 @@ function renderEvidenceQueue(scenario = scenarios[currentScenarioKey]) {
     extractionStatus: 'scenario_signal',
     signals: []
   }));
-  const items = [...scenarioItems, ...uploadedEvidence];
+  const items = activeRunMode === 'live' ? uploadedEvidence : scenarioItems;
+  if (!items.length) {
+    evidenceQueue.innerHTML = '<span><b>UP-00</b><span>No live evidence uploaded yet.</span></span>';
+    return;
+  }
   evidenceQueue.innerHTML = items.map((item) => `
     <span class="${item.extractionStatus === 'binary_registered' ? 'needs-extraction' : ''}">
       <b>${escapeHtml(item.evidenceId)}</b>
@@ -517,6 +619,7 @@ function renderRun(result, options = {}) {
 
   if (!result.ok) {
     lastRun = result;
+    lastRuns[activeRunMode] = result;
     decisionText.textContent = result.message || 'Run blocked';
     approvalStatus.textContent = 'Case could not be evaluated.';
     approvalButton.textContent = 'Approval locked';
@@ -537,6 +640,7 @@ function renderRun(result, options = {}) {
 
   if (finalVisible) {
     lastRun = result;
+    lastRuns[activeRunMode] = result;
   }
 
   const domains = Array.isArray(result.domains) ? result.domains : [];
@@ -673,6 +777,7 @@ function renderArtifactPreview(result, options = {}) {
   const gaps = Array.isArray(result.gaps) ? result.gaps : [];
   const evidenceIds = Array.isArray(result.evidenceIds) ? result.evidenceIds : [];
   const documents = evidenceDocuments(result);
+  const liveUploadCount = documents.filter((doc) => /^UP-/i.test(doc.evidenceId || '')).length;
   const extractedCount = documents.filter((doc) => /text|pdf|manual/i.test(doc.extractionStatus || '')).length;
   const ready = options.finalVisible;
   artifactPreview.innerHTML = `
@@ -685,7 +790,8 @@ function renderArtifactPreview(result, options = {}) {
       <span>Domains</span><b>${escapeHtml(domains.length)}</b>
       <span>Gaps</span><b>${escapeHtml(gaps.length)}</b>
       <span>Evidence IDs</span><b>${escapeHtml(evidenceIds.length)}</b>
-      <span>Uploaded docs</span><b>${escapeHtml(documents.length)}</b>
+      <span>Evidence docs</span><b>${escapeHtml(documents.length)}</b>
+      <span>Live uploads</span><b>${escapeHtml(liveUploadCount)}</b>
       <span>Extracted docs</span><b>${escapeHtml(extractedCount)}</b>
       <span>Runtime</span><b>${escapeHtml(formatRuntime(result.runtime?.actualRuntime || result.mode || 'unknown'))}</b>
     </div>
@@ -712,6 +818,7 @@ function playResult(result) {
 }
 
 async function runAgent(payload, options = {}) {
+  const runMode = options.mode || activeRunMode;
   clearPlaybackTimers();
   sampleRun.disabled = true;
   sampleRun.textContent = 'Running';
@@ -727,19 +834,28 @@ async function runAgent(payload, options = {}) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
+    if (runMode !== activeRunMode) {
+      lastRuns[runMode] = result;
+      return;
+    }
     if (options.playback) {
       playResult(result);
     } else {
       renderRun(result);
     }
   } catch (error) {
-    renderRun({
+    const failure = {
       ok: false,
       message: error instanceof Error ? error.message : 'Run failed'
-    });
+    };
+    if (runMode !== activeRunMode) {
+      lastRuns[runMode] = failure;
+      return;
+    }
+    renderRun(failure);
   } finally {
     sampleRun.disabled = false;
-    sampleRun.textContent = 'Watch demo';
+    sampleRun.textContent = runModeCopy[activeRunMode].actionButton;
   }
 }
 
@@ -859,10 +975,17 @@ async function loadDeploymentStatus() {
   renderStatusCards(results);
 }
 
+runModeButtons.forEach((button) => {
+  button.addEventListener('click', () => {
+    setRunMode(button.dataset.runMode);
+  });
+});
+
 document.querySelectorAll('[data-scenario]').forEach((button) => {
   button.addEventListener('click', () => {
+    setRunMode('demo', { skipRender: true });
     applyScenario(button.dataset.scenario);
-    runAgent(currentFormPayload(), { playback: true });
+    runAgent(currentFormPayload(), { playback: true, mode: 'demo' });
   });
 });
 
@@ -890,7 +1013,7 @@ evidenceDropzone.addEventListener('drop', (event) => {
 
 form.addEventListener('submit', (event) => {
   event.preventDefault();
-  runAgent(currentFormPayload(), { playback: true });
+  runAgent(currentFormPayload(), { playback: true, mode: activeRunMode });
 });
 
 runtimeConfig.addEventListener('submit', (event) => {
@@ -913,10 +1036,10 @@ resetConfig.addEventListener('click', () => {
   loadBenchmarks();
 });
 
-sampleRun.addEventListener('click', () => runAgent(currentFormPayload(), { playback: true }));
+sampleRun.addEventListener('click', () => runAgent(currentFormPayload(), { playback: true, mode: activeRunMode }));
 exportRun.addEventListener('click', () => {
   if (!lastRun?.ok) {
-    exportRun.textContent = 'Run demo first';
+    exportRun.textContent = activeRunMode === 'live' ? 'Run live first' : 'Run demo first';
     window.setTimeout(() => {
       exportRun.textContent = 'Export pack';
     }, 1400);
@@ -984,10 +1107,11 @@ function animateNetwork() {
   draw();
 }
 
+setRunMode('demo', { skipRender: true });
 applyScenario(currentScenarioKey);
 hydrateConfigForm();
 loadDeploymentStatus();
 loadReadiness();
 loadBenchmarks();
-runAgent(currentFormPayload(), { playback: true });
+runAgent(currentFormPayload(), { playback: true, mode: 'demo' });
 animateNetwork();

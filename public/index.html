@@ -7,7 +7,7 @@
     <link rel="icon" href='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" fill="%2306110d"/><text x="5" y="22" fill="%2312d6a1" font-family="Arial" font-size="13" font-weight="700">P42</text></svg>' />
     <link rel="stylesheet" href="styles.css" />
   </head>
-  <body>
+  <body data-run-mode="demo">
     <canvas id="networkCanvas" aria-hidden="true"></canvas>
     <header class="topbar">
       <div class="brand">
@@ -30,13 +30,31 @@
 
     <main class="workbench">
       <section class="command-center" id="run">
+        <div class="mode-tabs" role="tablist" aria-label="Run mode">
+          <button id="demoModeTab" type="button" class="mode-tab is-active" role="tab" aria-selected="true" aria-controls="run" data-run-mode="demo">
+            <span>Demo replay</span>
+            <small>Packaged reviewer walkthrough</small>
+          </button>
+          <button id="liveModeTab" type="button" class="mode-tab" role="tab" aria-selected="false" aria-controls="run" data-run-mode="live">
+            <span>Live run</span>
+            <small>Current intake and uploaded evidence</small>
+          </button>
+        </div>
+
         <aside class="case-panel pane">
           <div class="pane-header">
-            <span class="eyebrow">Case intake</span>
-            <strong>Golden review file</strong>
+            <span id="casePanelEyebrow" class="eyebrow">Demo workspace</span>
+            <strong id="casePanelTitle">Golden review file</strong>
           </div>
 
-          <div class="scenario-switcher" aria-label="Case scenarios">
+          <div class="mode-note mode-demo-only">
+            Preset cases replay the submission story without attaching local evidence.
+          </div>
+          <div class="mode-note mode-live-only">
+            Live mode uses the edited intake fields and every uploaded evidence file.
+          </div>
+
+          <div class="scenario-switcher mode-demo-only" aria-label="Case scenarios">
             <button type="button" class="scenario-button is-active" data-scenario="aiSaas">AI SaaS</button>
             <button type="button" class="scenario-button" data-scenario="financeVendor">Finance vendor</button>
             <button type="button" class="scenario-button" data-scenario="lowRisk">Low risk</button>
@@ -61,14 +79,14 @@
               Evidence summary
               <textarea name="documentSummary" rows="4">SOC 2 summary available. No signed DPA, model-training exclusion, or continuity plan attached.</textarea>
             </label>
-            <label class="upload-zone" id="evidenceDropzone">
+            <label class="upload-zone mode-live-only" id="evidenceDropzone">
               <input id="evidenceInput" type="file" multiple accept=".txt,.md,.markdown,.json,.csv,.log,.pdf,.doc,.docx,text/*,application/json,text/csv,application/pdf" />
               <span>Drop or select evidence files</span>
               <small>Text, Markdown, JSON, CSV, and logs are extracted in-browser. PDF/DOCX are registered for backend extraction.</small>
             </label>
-            <div id="evidenceIngestionStatus" class="ingestion-status">No uploaded evidence yet.</div>
+            <div id="evidenceIngestionStatus" class="ingestion-status mode-live-only">No uploaded evidence yet.</div>
             <div id="evidenceQueue" class="evidence-queue" aria-live="polite"></div>
-            <button type="submit" class="primary-action">Run case</button>
+            <button id="formRunButton" type="submit" class="primary-action">Run demo</button>
           </form>
         </aside>
 
@@ -76,8 +94,8 @@
           <div class="runway-top">
             <div>
               <span class="eyebrow">CrewAI Flow</span>
-              <h1>Watch the agent work</h1>
-              <p>Specialists map obligations, inspect evidence, recommend controls, and package the approval file under a deterministic guardrail.</p>
+              <h1 id="runwayTitle">Watch the agent work</h1>
+              <p id="runwayDescription">Specialists map obligations, inspect evidence, recommend controls, and package the approval file under a deterministic guardrail.</p>
             </div>
             <div class="run-actions">
               <button id="sampleRun" type="button" class="primary-action">Watch demo</button>
