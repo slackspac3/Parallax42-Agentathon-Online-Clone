@@ -15,31 +15,32 @@
         <span class="brand-name">Parallax42 Compliance Intelligence Agent</span>
       </div>
       <nav aria-label="Primary">
-        <a href="#run">Run</a>
-        <a href="#deployment">Deploy</a>
+        <a href="#run">Demo</a>
+        <a href="#workflow">CrewAI</a>
         <a href="#evidence">Evidence</a>
-        <a href="#readiness">Readiness</a>
+        <a href="#hardening">Hardening</a>
       </nav>
     </header>
 
     <main>
       <section class="workspace" id="run">
         <div class="intro">
-          <p class="eyebrow">G42 AI agent submission workspace</p>
-          <h1>Compliance decisions with traceable evidence, named gaps, and human approval.</h1>
-          <p class="lede">Run a compliance case through the local agent loop, then package the live Parallax42 deployment, benchmarks, and architecture evidence for submission.</p>
+          <p class="eyebrow">Reviewer demo cockpit</p>
+          <h1>Parallax42 Compliance Intelligence Agent</h1>
+          <p class="lede">Run the golden AI SaaS case, inspect CrewAI Flow orchestration, and export the audit-ready decision pack.</p>
           <div class="actions">
-            <button id="sampleRun" type="button">Run sample case</button>
-            <a id="readinessJsonLink" href="api/readiness">Readiness JSON</a>
+            <button id="sampleRun" type="button">Run golden demo</button>
+            <button id="exportRun" type="button" class="secondary-button">Export audit pack</button>
+            <a id="readinessJsonLink" href="api/readiness">Readiness</a>
             <a id="benchmarksJsonLink" href="api/benchmarks">Benchmarks</a>
-            <a id="goldenDemoLink" href="api/demo/golden">Golden Demo</a>
+            <a id="goldenDemoLink" href="api/demo/golden">Golden JSON</a>
           </div>
         </div>
 
         <form id="agentForm" class="run-panel">
           <label>
             Compliance brief
-            <textarea name="brief" rows="7">Procure a critical AI SaaS supplier that processes personal data, integrates with Azure AD and ServiceNow, and supports finance reporting across the UAE.</textarea>
+            <textarea name="brief" rows="6">Procure a critical AI SaaS supplier that processes personal data, integrates with Azure AD and ServiceNow, and supports finance reporting across the UAE.</textarea>
           </label>
           <div class="grid">
             <label>
@@ -53,7 +54,7 @@
           </div>
           <label>
             Evidence summary
-            <textarea name="documentSummary" rows="4">SOC 2 summary available. No signed DPA, model-training exclusion, or continuity plan attached.</textarea>
+            <textarea name="documentSummary" rows="3">SOC 2 summary available. No signed DPA, model-training exclusion, or continuity plan attached.</textarea>
           </label>
           <button type="submit">Run agent</button>
         </form>
@@ -80,34 +81,46 @@
 
       <section class="status-panel" id="deployment">
         <div>
-          <p class="eyebrow">Deployment control</p>
-          <h2>Live readiness across local, Vercel, and Parallax42 services.</h2>
-          <p>The cockpit can run against the local Node service during development or the Vercel API relay from GitHub Pages.</p>
+          <p class="eyebrow">Live proof</p>
+          <h2>Deployment health</h2>
+          <p>API relay, Parallax42 backend, and Compass gateway are checked from the running cockpit.</p>
         </div>
-        <form id="runtimeConfig" class="config-panel">
-          <label>
-            API mode
-            <select name="apiMode" id="apiMode">
-              <option value="auto">Auto</option>
-              <option value="local">Local</option>
-              <option value="relay">Vercel relay</option>
-              <option value="live">Live backend focus</option>
-            </select>
-          </label>
-          <label>
-            Vercel relay URL
-            <input name="relayUrl" id="relayUrl" autocomplete="off" />
-          </label>
-          <label>
-            Parallax42 backend URL
-            <input name="backendUrl" id="backendUrl" autocomplete="off" />
-          </label>
-          <div class="form-actions">
-            <button type="submit">Save runtime</button>
-            <button type="button" id="resetConfig" class="secondary-button">Reset</button>
-          </div>
-        </form>
         <div id="deploymentStatus" class="status-list" aria-live="polite"></div>
+        <details class="advanced-config">
+          <summary>Advanced runtime settings</summary>
+          <form id="runtimeConfig" class="config-panel">
+            <label>
+              API mode
+              <select name="apiMode" id="apiMode">
+                <option value="auto">Auto</option>
+                <option value="local">Local</option>
+                <option value="relay">Vercel relay</option>
+                <option value="live">Live backend focus</option>
+              </select>
+            </label>
+            <label>
+              Vercel relay URL
+              <input name="relayUrl" id="relayUrl" autocomplete="off" />
+            </label>
+            <label>
+              Parallax42 backend URL
+              <input name="backendUrl" id="backendUrl" autocomplete="off" />
+            </label>
+            <div class="form-actions">
+              <button type="submit">Save runtime</button>
+              <button type="button" id="resetConfig" class="secondary-button">Reset</button>
+            </div>
+          </form>
+        </details>
+      </section>
+
+      <section class="workflow-section" id="workflow">
+        <div>
+          <p class="eyebrow">CrewAI Flow</p>
+          <h2>Specialist review path</h2>
+          <p>Six role-specific agents are represented in the orchestration contract. The deterministic decision engine remains the approval guardrail until live LLM eval gates are added.</p>
+        </div>
+        <div id="specialistList" class="specialist-list" aria-live="polite"></div>
       </section>
 
       <section class="split" id="evidence">
@@ -122,16 +135,17 @@
       </section>
 
       <section class="trace-section">
-        <h2>Agent Trace</h2>
+        <h2>Audit Trace</h2>
         <ol id="traceList" class="trace"></ol>
       </section>
 
-      <section class="readiness" id="readiness">
+      <section class="readiness" id="hardening">
         <div>
-          <h2>Submission Readiness</h2>
-          <p>Current state from this packaging repo plus linked Parallax42 deployment evidence.</p>
+          <p class="eyebrow">Production hardening</p>
+          <h2>Submission readiness track</h2>
+          <p>Current proof is separated from remaining enterprise authorization work.</p>
         </div>
-        <dl id="readinessList"></dl>
+        <div id="readinessList" class="hardening-list"></div>
       </section>
 
       <section class="trace-section">

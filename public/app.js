@@ -24,6 +24,7 @@ const sample = {
 const form = document.querySelector('#agentForm');
 const runtimeConfig = document.querySelector('#runtimeConfig');
 const sampleRun = document.querySelector('#sampleRun');
+const exportRun = document.querySelector('#exportRun');
 const resetConfig = document.querySelector('#resetConfig');
 const apiMode = document.querySelector('#apiMode');
 const relayUrl = document.querySelector('#relayUrl');
@@ -36,11 +37,60 @@ const domainList = document.querySelector('#domainList');
 const gapList = document.querySelector('#gapList');
 const traceList = document.querySelector('#traceList');
 const readinessList = document.querySelector('#readinessList');
+const specialistList = document.querySelector('#specialistList');
 const benchmarkSummary = document.querySelector('#benchmarkSummary');
 const deploymentStatus = document.querySelector('#deploymentStatus');
 const readinessJsonLink = document.querySelector('#readinessJsonLink');
 const benchmarksJsonLink = document.querySelector('#benchmarksJsonLink');
 const goldenDemoLink = document.querySelector('#goldenDemoLink');
+let lastRun = null;
+
+const agentLabels = {
+  runtime_router: 'Runtime Router',
+  intake_agent: 'Compliance Orchestrator',
+  domain_scanner_agent: 'Regulatory Obligation Mapper',
+  evidence_agent: 'Evidence Examiner',
+  control_agent: 'Risk And Control Analyst',
+  output_review_agent: 'Responsible AI Reviewer'
+};
+
+const readinessCopy = {
+  productionDeployment: {
+    label: 'Live deployment',
+    proof: 'GitHub Pages cockpit, Vercel API, Parallax42 backend, Compass gateway',
+    next: 'Keep endpoint evidence fresh for final submission.'
+  },
+  sovereignLlmBoundary: {
+    label: 'Sovereign model boundary',
+    proof: 'Compass gateway is live and server-side; no browser model keys',
+    next: 'Add gateway smoke-test artifact and threat model.'
+  },
+  auditTraceability: {
+    label: 'Audit traceability',
+    proof: 'Decision trace and JSONL audit records are present',
+    next: 'Move to durable append-only database audit.'
+  },
+  rbac: {
+    label: 'RBAC and authentication',
+    proof: 'Role model and route policy are documented',
+    next: 'Implement Entra JWT validation and reviewer/approver enforcement.'
+  },
+  benchmarks: {
+    label: 'Benchmarks',
+    proof: 'Golden evals and local benchmark suite pass',
+    next: 'Add live latency, upload/OCR, adversarial, and fallback benchmarks.'
+  },
+  responsibleAi: {
+    label: 'Responsible AI',
+    proof: 'Human approval, no auto-approval, and output review checks are active',
+    next: 'Add adversarial evals and live LLM output graders.'
+  },
+  videoDemo: {
+    label: 'Video demo',
+    proof: 'Golden workflow and demo script are ready',
+    next: 'Record the Watch the Agent Work walkthrough.'
+  }
+};
 
 function escapeHtml(value = '') {
   return String(value)
@@ -165,6 +215,34 @@ function humanize(value = '') {
   return String(value || '').replaceAll('_', ' ');
 }
 
+function titleCase(value = '') {
+  return humanize(value).replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function formatRuntime(value = '') {
+  const runtimes = {
+    crewai_flow: 'CrewAI Flow',
+    crewai_flow_dry_run: 'CrewAI Flow dry run',
+    crewai_llm: 'CrewAI live LLM',
+    deterministic: 'Deterministic guardrail',
+    js_static: 'JavaScript static manifest',
+    python_dry_run: 'Python dry-run manifest'
+  };
+  return runtimes[value] || titleCase(value || 'runtime');
+}
+
+function downloadJson(filename, payload) {
+  const blob = new Blob([`${JSON.stringify(payload, null, 2)}\n`], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function updateJsonLinks() {
   readinessJsonLink.href = apiUrl('/api/readiness');
   benchmarksJsonLink.href = apiUrl('/api/benchmarks');
@@ -181,6 +259,7 @@ function hydrateConfigForm() {
 
 function renderRun(result) {
   if (!result.ok) {
+    lastRun = result;
     decisionText.textContent = result.message || 'Run blocked';
     runtimeText.textContent = '--';
     readinessScore.textContent = '--';
@@ -188,8 +267,11 @@ function renderRun(result) {
     domainList.innerHTML = '';
     gapList.innerHTML = '';
     traceList.innerHTML = '';
+    specialistList.innerHTML = '';
     return;
   }
+
+  lastRun = result;
 
   const domains = Array.isArray(result.domains) ? result.domains : [];
   const gaps = Array.isArray(result.gaps) ? result.gaps : [];
@@ -197,7 +279,7 @@ function renderRun(result) {
   const evidenceIds = Array.isArray(result.evidenceIds) ? result.evidenceIds : [];
 
   decisionText.textContent = result.decision.recommendation;
-  runtimeText.textContent = humanize(result.runtime?.actualRuntime || result.mode || 'unknown');
+  runtimeText.textContent = formatRuntime(result.runtime?.actualRuntime || result.mode || 'unknown');
   readinessScore.textContent = `${Math.round(result.decision.readinessScore * 100)}%`;
   evidenceCount.textContent = String(evidenceIds.length);
 
@@ -219,14 +301,52 @@ function renderRun(result) {
     `).join('')
     : '<article class="item"><strong>No blocking gaps detected.</strong><p>Human approval is still required before relying on the decision.</p></article>';
 
+  renderSpecialists(result);
+
   traceList.innerHTML = trace.map((event) => `
     <li>
       <div>
-        <strong>${escapeHtml(event.agent)}</strong>
+        <strong>${escapeHtml(agentLabels[event.agent] || titleCase(event.agent))}</strong>
         <p>${escapeHtml(humanize(event.eventType))}</p>
       </div>
     </li>
   `).join('');
+}
+
+function renderSpecialists(result) {
+  const stages = result.orchestration?.flow?.stages || [];
+  const traceTypes = new Set((result.trace || []).map((event) => event.eventType));
+  const fallbackStages = [
+    { role: 'Compliance Orchestrator', method: 'load_case', expectedTraceEvent: 'case_loaded' },
+    { role: 'Regulatory Obligation Mapper', method: 'map_obligations', expectedTraceEvent: 'domains_scanned' },
+    { role: 'Evidence Examiner', method: 'examine_evidence', expectedTraceEvent: 'evidence_mapped' },
+    { role: 'Risk And Control Analyst', method: 'recommend_controls', expectedTraceEvent: 'controls_recommended' },
+    { role: 'Responsible AI Reviewer', method: 'review_responsible_ai', expectedTraceEvent: 'output_review_completed' },
+    { role: 'Audit Packager', method: 'package_audit_brief', expectedTraceEvent: 'output_review_completed' }
+  ];
+  const items = (stages.length ? stages : fallbackStages).map((stage) => {
+    const complete = traceTypes.has(stage.expectedTraceEvent);
+    return `
+      <article class="specialist ${complete ? 'is-complete' : ''}">
+        <span>${escapeHtml(complete ? 'complete' : 'queued')}</span>
+        <strong>${escapeHtml(stage.role || titleCase(stage.agent || stage.id))}</strong>
+        <p>${escapeHtml(humanize(stage.method || stage.id))}</p>
+      </article>
+    `;
+  }).join('');
+
+  const llm = result.orchestration?.liveLlm;
+  const llmNote = llm?.requested
+    ? `${llm.outputAvailable ? 'Live LLM specialist output attached' : 'Live LLM requested; deterministic guardrail fallback active'}`
+    : 'Live LLM calls are off; Flow orchestration and deterministic guardrails are active';
+
+  specialistList.innerHTML = `
+    <div class="runtime-note">
+      <strong>${escapeHtml(formatRuntime(result.runtime?.actualRuntime || result.mode || 'runtime'))}</strong>
+      <p>${escapeHtml(llmNote)}</p>
+    </div>
+    ${items}
+  `;
 }
 
 async function runAgent(payload) {
@@ -251,13 +371,20 @@ async function loadReadiness() {
     const readiness = await apiFetch('/api/readiness');
     const inventory = readiness.submissionReadiness || {};
     readinessList.innerHTML = Object.entries(inventory).map(([key, value]) => `
-      <dt>${escapeHtml(key.replace(/([A-Z])/g, ' $1').toLowerCase())}</dt>
-      <dd>${escapeHtml(humanize(value))}</dd>
+      <article class="hardening-item">
+        <span>${escapeHtml(humanize(value))}</span>
+        <strong>${escapeHtml(readinessCopy[key]?.label || key.replace(/([A-Z])/g, ' $1').toLowerCase())}</strong>
+        <p>${escapeHtml(readinessCopy[key]?.proof || 'Current proof recorded in the readiness endpoint.')}</p>
+        <small>${escapeHtml(readinessCopy[key]?.next || 'Track in the production hardening plan.')}</small>
+      </article>
     `).join('');
   } catch (error) {
     readinessList.innerHTML = `
-      <dt>readiness api</dt>
-      <dd>${escapeHtml(error instanceof Error ? error.message : 'unavailable')}</dd>
+      <article class="hardening-item">
+        <span class="status-danger">unavailable</span>
+        <strong>Readiness API</strong>
+        <p>${escapeHtml(error instanceof Error ? error.message : 'unavailable')}</p>
+      </article>
     `;
   }
 }
@@ -386,6 +513,20 @@ resetConfig.addEventListener('click', () => {
 });
 
 sampleRun.addEventListener('click', () => runAgent(sample));
+exportRun.addEventListener('click', () => {
+  if (!lastRun?.ok) {
+    exportRun.textContent = 'Run demo first';
+    window.setTimeout(() => {
+      exportRun.textContent = 'Export audit pack';
+    }, 1400);
+    return;
+  }
+  downloadJson(`p42-audit-pack-${lastRun.case?.caseId || 'demo'}.json`, {
+    exportedAt: new Date().toISOString(),
+    service: 'parallax42-compliance-intelligence-agent',
+    run: lastRun
+  });
+});
 
 function animateNetwork() {
   const canvas = document.querySelector('#networkCanvas');
