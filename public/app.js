@@ -255,6 +255,13 @@ const textEvidenceSampleBytes = 180 * 1024;
 const defaultUploadChunkBytes = 1024 * 1024;
 const evidenceDbName = 'p42-compliance-evidence-index';
 const evidenceDbVersion = 1;
+const evidencePipelineSteps = [
+  { id: 'queue', label: 'Queue' },
+  { id: 'upload', label: 'Upload' },
+  { id: 'parse', label: 'Parse' },
+  { id: 'embed', label: 'Embed' },
+  { id: 'ready', label: 'Ready' }
+];
 const evidenceSignalPatterns = [
   ['export control', /export control|classification|end[- ]use|end user|import permit|sanctions|restricted party|freight forwarder/i],
   ['chain of custody', /chain[- ]of[- ]custody|serial number|asset inventory|firmware|remote access|warehouse|customs/i],
@@ -475,8 +482,63 @@ function yieldToBrowser() {
 
 function setAttachmentStatus(message = '', state = 'idle') {
   if (!chatAttachmentStatus) return;
+  chatAttachmentStatus.classList.remove('has-pipeline');
   chatAttachmentStatus.textContent = message;
   chatAttachmentStatus.dataset.state = state;
+}
+
+function pipelineStepStatus(stepId, phase) {
+  const phaseIndex = evidencePipelineSteps.findIndex((step) => step.id === phase);
+  const stepIndex = evidencePipelineSteps.findIndex((step) => step.id === stepId);
+  if (phase === 'error') return stepIndex <= Math.max(0, phaseIndex) ? 'error' : 'queued';
+  if (stepIndex < phaseIndex) return 'complete';
+  if (stepIndex === phaseIndex) return 'active';
+  return 'queued';
+}
+
+function renderEvidencePipelineStatus({
+  title = 'Evidence pipeline',
+  detail = 'Preparing evidence.',
+  phase = 'queue',
+  progress = 4,
+  files = [],
+  metric = '',
+  state = 'working'
+} = {}) {
+  if (!chatAttachmentStatus) return;
+  const boundedProgress = Math.max(4, Math.min(100, Math.round(Number(progress) || 4)));
+  const visibleFiles = Array.from(files || []).slice(0, 3);
+  chatAttachmentStatus.dataset.state = state;
+  chatAttachmentStatus.classList.add('has-pipeline');
+  chatAttachmentStatus.innerHTML = `
+    <div class="evidence-pipeline is-${escapeHtml(state)}">
+      <div class="pipeline-head">
+        <div class="pipeline-orb" aria-hidden="true"><span></span></div>
+        <div>
+          <strong>${escapeHtml(title)}</strong>
+          <p>${escapeHtml(detail)}</p>
+        </div>
+        <b>${escapeHtml(metric || `${boundedProgress}%`)}</b>
+      </div>
+      <div class="pipeline-meter" aria-hidden="true">
+        <span style="width: ${boundedProgress}%"></span>
+      </div>
+      <div class="pipeline-steps" aria-label="Evidence processing progress">
+        ${evidencePipelineSteps.map((step) => `
+          <span class="is-${escapeHtml(pipelineStepStatus(step.id, phase))}">
+            <i></i>${escapeHtml(step.label)}
+          </span>
+        `).join('')}
+      </div>
+      ${visibleFiles.length ? `
+        <div class="pipeline-files">
+          ${visibleFiles.map((file) => `
+            <span>${escapeHtml(file.name || file.fileName || file.title || 'Evidence file')}</span>
+          `).join('')}
+        </div>
+      ` : ''}
+    </div>
+  `;
 }
 
 function summarizeEvidenceText(text = '', maxLength = 720) {
@@ -859,9 +921,17 @@ function applyCaseAssistOutput(output = {}, offset = uploadedEvidence.length) {
   return parsed;
 }
 
-async function uploadEvidenceFilesToBackend(files = []) {
+async function uploadEvidenceFilesToBackend(files = [], onProgress = () => {}) {
   const selected = files.filter((file) => backendParsedEvidenceExtensions.has(fileExtension(file.name)));
   if (!selected.length) return [];
+
+  onProgress({
+    phase: 'queue',
+    progress: 8,
+    title: 'Opening parser session',
+    detail: 'Preparing secure chunked upload for backend document intelligence.',
+    files: selected
+  });
 
   const session = await backendApiFetch('/case/assist/upload/init', {
     method: 'POST',
@@ -878,6 +948,9 @@ async function uploadEvidenceFilesToBackend(files = []) {
       }))
     })
   });
+
+  const totalChunks = (session.files || []).reduce((sum, fileSession) => sum + Number(fileSession.total_chunks || 0), 0) || selected.length;
+  let uploadedChunks = 0;
 
   for (const [fileIndex, file] of selected.entries()) {
     const fileSession = session.files?.[fileIndex];
@@ -901,8 +974,25 @@ async function uploadEvidenceFilesToBackend(files = []) {
         const detail = await response.text();
         throw new Error(detail || `Chunk upload failed for ${file.name}.`);
       }
+      uploadedChunks += 1;
+      onProgress({
+        phase: 'upload',
+        progress: 12 + (uploadedChunks / totalChunks) * 34,
+        title: 'Streaming evidence',
+        detail: `Uploading ${file.name} · chunk ${chunkIndex + 1} of ${fileSession.total_chunks}`,
+        metric: `${uploadedChunks}/${totalChunks}`,
+        files: selected
+      });
     }
   }
+
+  onProgress({
+    phase: 'parse',
+    progress: 52,
+    title: 'Parser assembling file',
+    detail: 'The backend is reassembling chunks and starting semantic document analysis.',
+    files: selected
+  });
 
   await backendApiFetch('/case/assist/upload/complete', {
     method: 'POST',
@@ -915,10 +1005,25 @@ async function uploadEvidenceFilesToBackend(files = []) {
   while (Date.now() - startedAt < 240000) {
     await new Promise((resolve) => window.setTimeout(resolve, 2000));
     lastStatus = await backendApiFetch(`/case/assist/upload/status?upload_id=${encodeURIComponent(session.upload_id)}`);
+    onProgress({
+      phase: 'parse',
+      progress: Math.min(82, 54 + ((Date.now() - startedAt) / 240000) * 28),
+      title: 'Document intelligence running',
+      detail: `Backend parser status: ${lastStatus.status || 'working'}. Extracting clauses, entities, obligations, and risk signals.`,
+      metric: lastStatus.status || 'parsing',
+      files: selected
+    });
     if (lastStatus.status === 'failed') {
       throw new Error(lastStatus.error || 'Document parser failed.');
     }
     if (lastStatus.status === 'complete' && lastStatus.result_available) {
+      onProgress({
+        phase: 'parse',
+        progress: 86,
+        title: 'Semantic parse received',
+        detail: 'Parser returned structured document evidence. Preparing embedding index.',
+        files: selected
+      });
       const output = await backendApiFetch(`/case/assist/upload/result?upload_id=${encodeURIComponent(session.upload_id)}`);
       return applyCaseAssistOutput(output);
     }
@@ -965,7 +1070,13 @@ async function ingestEvidenceFiles(files = []) {
   const fileLabel = `${selected.length} evidence file${selected.length === 1 ? '' : 's'}`;
   evidenceIngestionStatus.textContent = `Preparing ${fileLabel}...`;
   if (activeRunMode === 'chat') {
-    setAttachmentStatus(`Preparing ${fileLabel}...`, 'working');
+    renderEvidencePipelineStatus({
+      phase: 'queue',
+      progress: 6,
+      title: 'Evidence intake started',
+      detail: `Preparing ${fileLabel} for parser and retrieval indexing.`,
+      files: selected
+    });
     renderAgentActivity([
       { label: 'Evidence', detail: 'reading files', status: 'active' },
       { label: 'NLP Intake', detail: 'waiting', status: 'queued' },
@@ -983,7 +1094,13 @@ async function ingestEvidenceFiles(files = []) {
     if (backendFiles.length) {
       evidenceIngestionStatus.textContent = `Uploading ${backendFiles.length} document${backendFiles.length === 1 ? '' : 's'} to backend parser...`;
       if (activeRunMode === 'chat') {
-        setAttachmentStatus('Uploading PDF/DOCX evidence to the backend document parser...', 'working');
+        renderEvidencePipelineStatus({
+          phase: 'upload',
+          progress: 12,
+          title: 'Backend parser online',
+          detail: 'Streaming PDF/DOCX evidence in small chunks; browser parsing stays off the main thread.',
+          files: backendFiles
+        });
         renderAgentActivity([
           { label: 'Evidence', detail: 'uploading', status: 'active' },
           { label: 'Parser', detail: 'queued', status: 'queued' },
@@ -993,7 +1110,9 @@ async function ingestEvidenceFiles(files = []) {
       }
       await yieldToBrowser();
       try {
-        const parsedEvidence = await uploadEvidenceFilesToBackend(backendFiles);
+        const parsedEvidence = await uploadEvidenceFilesToBackend(backendFiles, (progress) => {
+          if (activeRunMode === 'chat') renderEvidencePipelineStatus(progress);
+        });
         extracted.push(...parsedEvidence);
       } catch (error) {
         const detail = error instanceof Error ? error.message : 'Backend parsing failed.';
@@ -1010,7 +1129,14 @@ async function ingestEvidenceFiles(files = []) {
     for (const [index, file] of browserFiles.entries()) {
       evidenceIngestionStatus.textContent = `Reading ${index + 1}/${browserFiles.length}: ${file.name}`;
       if (activeRunMode === 'chat') {
-        setAttachmentStatus(`Reading ${index + 1}/${browserFiles.length}: ${file.name}`, 'working');
+        renderEvidencePipelineStatus({
+          phase: 'parse',
+          progress: 36 + ((index + 1) / browserFiles.length) * 28,
+          title: 'Reading local text evidence',
+          detail: `Sampling ${file.name} for signals and metadata.`,
+          metric: `${index + 1}/${browserFiles.length}`,
+          files: browserFiles
+        });
       }
       await yieldToBrowser();
       extracted.push(await extractEvidenceFile(file, offset + extracted.length));
@@ -1022,7 +1148,14 @@ async function ingestEvidenceFiles(files = []) {
     if (indexableCount) {
       evidenceIngestionStatus.textContent = `Embedding ${indexableCount} parsed evidence document${indexableCount === 1 ? '' : 's'} for retrieval...`;
       if (activeRunMode === 'chat') {
-        setAttachmentStatus('Embedding parsed evidence through the shared gateway...', 'working');
+        renderEvidencePipelineStatus({
+          phase: 'embed',
+          progress: 88,
+          title: 'Building retrieval memory',
+          detail: 'Embedding parsed evidence with text-embedding-3-large through the shared gateway.',
+          metric: 'embedding',
+          files: extracted
+        });
         renderAgentActivity([
           { label: 'Evidence', detail: 'parsed', status: 'complete' },
           { label: 'Embeddings', detail: 'indexing', status: 'active' },
@@ -1032,6 +1165,17 @@ async function ingestEvidenceFiles(files = []) {
       }
       try {
         indexResult = await indexEvidenceForRetrieval(extracted);
+        if (activeRunMode === 'chat') {
+          renderEvidencePipelineStatus({
+            phase: 'ready',
+            progress: 100,
+            title: 'Evidence retrieval ready',
+            detail: `${indexResult?.chunking?.chunkCount || indexedEvidenceChunks.length} embedded chunks are ready for council citations.`,
+            metric: 'indexed',
+            files: extracted,
+            state: 'ready'
+          });
+        }
       } catch (error) {
         const detail = error instanceof Error ? error.message : 'Evidence indexing failed.';
         chatMessages.push({
@@ -1059,7 +1203,19 @@ async function ingestEvidenceFiles(files = []) {
             ? `Attached, parsed, and indexed ${extracted.length} evidence file${extracted.length === 1 ? '' : 's'}: ${names}. I extracted ${signalCount} signal${signalCount === 1 ? '' : 's'} and embedded ${chunkCount || indexedEvidenceChunks.length} retrieval chunk${(chunkCount || indexedEvidenceChunks.length) === 1 ? '' : 's'} for council citations.`
             : `Attached and parsed ${extracted.length} evidence file${extracted.length === 1 ? '' : 's'}: ${names}. I extracted ${signalCount} signal${signalCount === 1 ? '' : 's'}, but semantic retrieval is not indexed yet.`
       });
-      setAttachmentStatus(`${uploadedEvidence.length} file${uploadedEvidence.length === 1 ? '' : 's'} attached. ${indexedCount ? `${indexedEvidenceChunks.length} indexed chunks ready. ` : ''}${binaryOnlyCount ? 'Describe the case before running council.' : 'Continue the case or run council.'}`, 'ready');
+      if (indexedCount) {
+        renderEvidencePipelineStatus({
+          phase: 'ready',
+          progress: 100,
+          title: 'Evidence ready for council',
+          detail: `${uploadedEvidence.length} file${uploadedEvidence.length === 1 ? '' : 's'} attached · ${indexedEvidenceChunks.length} indexed chunks ready for semantic retrieval.`,
+          metric: 'ready',
+          files: extracted,
+          state: 'ready'
+        });
+      } else {
+        setAttachmentStatus(`${uploadedEvidence.length} file${uploadedEvidence.length === 1 ? '' : 's'} attached. ${binaryOnlyCount ? 'Describe the case before running council.' : 'Continue the case or run council.'}`, 'ready');
+      }
       renderChatMessages();
       renderAgentActivity([
         { label: 'Evidence', detail: binaryOnlyCount ? 'registered' : 'parsed', status: 'complete' },
