@@ -1926,6 +1926,148 @@ pre {
 
 .advisory-note p { margin: 7px 0 0; color: var(--text); line-height: 1.5; }
 
+/* Decision Room — missing class definitions */
+.decision-room-shell {
+  /* Combines .business-summary + .council-report; no extra layout needed */
+}
+
+.decision-room-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+}
+
+.decision-room-actions button {
+  padding: 10px 22px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--accent);
+  background: rgba(34,227,180,0.1);
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  cursor: pointer;
+  transition: background 180ms var(--ease), box-shadow 180ms var(--ease);
+}
+
+.decision-room-actions button:hover {
+  background: rgba(34,227,180,0.22);
+  box-shadow: 0 0 18px rgba(34,227,180,0.18);
+}
+
+.decision-room-actions span {
+  font-size: 11px;
+  color: var(--subtle);
+  line-height: 1.4;
+}
+
+.decision-room-actions.compact { margin-top: 0; }
+
+/* Risk Summary Panel */
+.risk-summary-panel { border-color: rgba(248,113,113,0.2); }
+
+/* Evidence Used Panel */
+.evidence-used-panel { border-color: rgba(96,165,250,0.2); }
+
+/* Memory Panels */
+.memory-panel {
+  border-color: rgba(167,139,250,0.2);
+  background: rgba(167,139,250,0.03);
+}
+
+.memory-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 8px;
+}
+
+.memory-card-grid > div {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.03);
+}
+
+.memory-card-grid span {
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+.memory-card-grid strong {
+  display: block;
+  margin-top: 6px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.memory-evidence-list { display: grid; gap: 8px; }
+
+.memory-evidence-list > div {
+  padding: 12px 14px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.025);
+}
+
+.memory-evidence-list span {
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+.memory-evidence-list strong { display: block; margin-top: 6px; line-height: 1.28; }
+.memory-evidence-list p { margin-top: 7px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+/* Advisory Specialists Panel */
+.advisory-specialists-panel {
+  border-color: rgba(251,191,36,0.2);
+  background: rgba(251,191,36,0.03);
+}
+
+.advisory-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.advisory-card-grid > div {
+  padding: 14px 16px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--line);
+  background: rgba(255,255,255,0.03);
+  transition: border-color 200ms;
+}
+
+.advisory-card-grid > div:hover { border-color: rgba(251,191,36,0.3); }
+
+.advisory-card-grid > div.is-unavailable { opacity: 0.5; }
+
+.advisory-card-grid span {
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.8px;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.advisory-card-grid > div.is-unavailable span { color: var(--subtle); }
+.advisory-card-grid strong { display: block; margin-top: 7px; line-height: 1.28; }
+.advisory-card-grid p { margin-top: 8px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+.advisory-card-grid small { display: block; margin-top: 9px; color: var(--subtle); font-size: 11px; }
+
+/* Council Timeline Panel */
+.council-timeline-panel { border-color: rgba(34,227,180,0.16); }
+
 /* ============================================================
    BOTTOM SECTIONS (Evidence, Audit, Hardening)
    ============================================================ */
