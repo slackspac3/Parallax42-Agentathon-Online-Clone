@@ -339,6 +339,53 @@ test('conversation records unknown terse answers as known gaps without repeating
   assert.match(second.reply, /known gap|recorded/i);
 });
 
+test('conversation treats broad unknown phrases as contextual answers without looping on evidence', () => {
+  const first = processConversation({
+    message: 'Assess a managed integration partner connecting Oracle ERP, Workday, ServiceNow, SharePoint, and Snowflake with privileged implementation access.'
+  }, { runtime: 'deterministic' });
+  const second = processConversation({
+    message: 'uae',
+    caseDraft: first.caseDraft
+  }, { runtime: 'deterministic' });
+
+  assert.ok(second.questions.some((question) => /evidence is available|contract terms|DPA|SOC 2/i.test(question)));
+  assert.ok(!second.questions.some((question) => /payroll-vendor proof/i.test(question)));
+
+  const third = processConversation({
+    message: 'we do not know at this point',
+    caseDraft: second.caseDraft
+  }, { runtime: 'deterministic' });
+  const fourth = processConversation({
+    message: 'not available yet',
+    caseDraft: third.caseDraft
+  }, { runtime: 'deterministic' });
+
+  assert.ok(third.caseDraft.knownGaps.includes('evidence'));
+  assert.ok(fourth.caseDraft.knownGaps.includes('evidence'));
+  assert.ok(!third.questions.some((question) => /source evidence|evidence is available|contract terms|SOC 2|DPA/i.test(question)));
+  assert.equal(fourth.questions.length, 0);
+});
+
+test('conversation maps unknown answers from full chat history when draft questions are missing', () => {
+  const result = processConversation({
+    message: 'we do not know at this point',
+    caseDraft: {
+      brief: 'Assess a managed integration partner with privileged access.',
+      businessUnit: 'Group Technology Risk',
+      geography: 'UAE',
+      conversationHistory: [
+        { role: 'user', text: 'Assess a managed integration partner.' },
+        { role: 'assistant', text: 'What source evidence should I treat as proof for this decision?' },
+        { role: 'user', text: 'we do not know at this point' }
+      ]
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.ok(result.caseDraft.knownGaps.includes('evidence'));
+  assert.ok(!result.questions.some((question) => /source evidence|evidence is available|contract terms|SOC 2|DPA/i.test(question)));
+  assert.match(result.reply, /source evidence as a known gap/i);
+});
+
 test('conversation asks to upload a generic agreement before demanding owner metadata', () => {
   const result = processConversation({
     message: 'I want to review an agreement'

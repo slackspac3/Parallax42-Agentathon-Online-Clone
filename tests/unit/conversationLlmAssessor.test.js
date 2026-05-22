@@ -212,6 +212,70 @@ test('conversation LLM assessor requests JSON mode and handles OpenAI response o
   }
 });
 
+test('conversation LLM assessor sends full chat context for terse answer interpretation', async () => {
+  const originalFetch = global.fetch;
+  try {
+    await withEnv({
+      P42_ADMIN_FEATURE_CONFIG_PATH: featureConfigPath(),
+      COMPASS_GATEWAY_BASE_URL: 'https://gateway.example/api',
+      COMPASS_GATEWAY_TOKEN: 'test-token',
+      CONVERSATION_LLM_MODEL: 'gpt-5.1'
+    }, async () => {
+      global.fetch = async (url, options) => {
+        const body = JSON.parse(options.body);
+        const prompt = JSON.parse(body.messages[1].content);
+        assert.equal(prompt.latestMessage, 'we do not know at this point');
+        assert.equal(prompt.conversationHistory.at(-2).role, 'assistant');
+        assert.match(prompt.conversationHistory.at(-2).text, /source evidence/i);
+        assert.match(prompt.currentDraft.conversationHistory.at(-2).text, /source evidence/i);
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            model: 'gpt-5.1',
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  intent: 'evidence_answer',
+                  requestType: 'supplier_risk',
+                  workflowType: 'supplier_risk_review',
+                  recommendedFirstAction: 'ask_scope',
+                  conversationStage: 'asking_clarification',
+                  assistantSummary: 'Evidence is pending and should be tracked as a gap.',
+                  confidence: 0.88,
+                  nextBestQuestion: 'Is there any access-control scope we should capture while evidence is pending?',
+                  caseUpdate: {
+                    knownGaps: ['source evidence pending']
+                  }
+                })
+              }
+            }]
+          })
+        };
+      };
+
+      const result = await assessConversationWithLlm({
+        message: 'we do not know at this point',
+        caseDraft: {
+          brief: 'Assess a managed integration partner with privileged access.'
+        },
+        history: [
+          { role: 'user', text: 'Assess a managed integration partner.' },
+          { role: 'assistant', text: 'What source evidence should I treat as proof for this decision?' },
+          { role: 'user', text: 'we do not know at this point' }
+        ]
+      });
+
+      assert.equal(result.llmAssessment.used, true);
+      assert.ok(result.caseDraft.knownGaps.includes('evidence'));
+      assert.ok(result.caseDraft.recentlyAnsweredFields.evidence > 0);
+      assert.equal(result.caseDraft.conversationHistory.length, 3);
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
 test('conversation LLM assessor reports malformed Compass output accurately', async () => {
   const originalFetch = global.fetch;
   try {

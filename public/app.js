@@ -3117,6 +3117,10 @@ async function submitChatMessage(rawMessage = '', options = {}) {
       body: JSON.stringify({
         message,
         caseDraft: chatCaseDraft,
+        history: chatMessages
+          .filter((item) => item && !item.pending && (item.role === 'user' || item.role === 'assistant'))
+          .slice(-12)
+          .map((item) => ({ role: item.role, text: item.text || '' })),
         uploadedEvidence,
         retrievalQuery: options.forceRun ? retrievalQueryFromDraft() : '',
         forceRun: Boolean(options.forceRun)
