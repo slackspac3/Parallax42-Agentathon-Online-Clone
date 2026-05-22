@@ -62,7 +62,9 @@
 
   function renderThinkingLoader(message) {
     const isCouncil = /council|workflow|retrieval|execut/i.test(message && message.text || '');
-    const steps = isCouncil
+    const steps = Array.isArray(message && message.thinkingSteps) && message.thinkingSteps.length
+      ? message.thinkingSteps
+      : isCouncil
       ? [
           ['Thinking', 'Checking case readiness and human approval boundary'],
           ['Retrieving', 'Looking for citation-ready evidence and prior reviewer memory'],
@@ -75,18 +77,27 @@
           ['Retrieving', 'Checking indexed evidence before asking for anything missing'],
           ['Formulating', 'Choosing one useful next question']
         ];
+    const activeIndex = Math.max(0, Math.min(steps.length - 1, Number(message && message.thinkingStepIndex || 0)));
+    const activeStep = steps[activeIndex] || steps[0] || [];
+    const attemptLabel = cleanText(message && message.attemptLabel);
     return `
       <div class="thinking-loader" aria-label="Advisor is working">
         <div class="thinking-loader-head">
           <span class="thinking-orb" aria-hidden="true"></span>
-          <strong>${escapeHtml(isCouncil ? 'Council is working' : 'Advisor is thinking')}</strong>
+          <div class="thinking-loader-copy">
+            <strong>${escapeHtml(message && message.phaseTitle || activeStep[0] || (isCouncil ? 'Council is working' : 'Advisor is thinking'))}</strong>
+            <p>${escapeHtml(message && message.phaseDetail || activeStep[1] || '')}</p>
+          </div>
+          ${attemptLabel ? `<span class="thinking-attempt-pill">${escapeHtml(attemptLabel)}</span>` : ''}
         </div>
         <div class="thinking-steps">
           ${steps.map(function renderStep(step, index) {
+            const label = Array.isArray(step) ? step[0] : step.label;
+            const detail = Array.isArray(step) ? step[1] : step.detail;
             return `
-              <div class="thinking-step" style="--step-index: ${index}">
-                <span>${escapeHtml(step[0])}</span>
-                <p>${escapeHtml(step[1])}</p>
+              <div class="thinking-step ${index === activeIndex ? 'is-active' : ''} ${index < activeIndex ? 'is-complete' : ''}" style="--step-index: ${index}">
+                <span>${escapeHtml(label)}</span>
+                <p>${escapeHtml(detail)}</p>
               </div>
             `;
           }).join('')}

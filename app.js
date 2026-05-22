@@ -1772,7 +1772,7 @@ function assistantRawSummary(text = '') {
 
 function assistantQuestionFromText(text = '') {
   const raw = String(text || '');
-  if (/Compass gateway is not configured|Smart intake received an invalid Compass response/i.test(raw)) return '';
+  if (/Compass gateway is not configured|Smart intake (?:received an invalid Compass response|could not get valid Compass JSON)/i.test(raw)) return '';
   const fallbackQuestion = () => {
     const missing = missingProofItems();
     if (missing.length) {
@@ -1814,7 +1814,7 @@ function normalizeAssistantQuestion(question = '') {
 }
 
 function assistantAcknowledgement(text = '') {
-  if (/Compass gateway is not configured|Smart intake received an invalid Compass response/i.test(text)) return 'Smart intake issue';
+  if (/Compass gateway is not configured|Smart intake (?:received an invalid Compass response|could not get valid Compass JSON)/i.test(text)) return 'Smart intake issue';
   if (/could not|failed|error/i.test(text)) return 'I hit a processing issue, but the case state is still safe.';
   if (lastRuns.chat?.ok) return 'Council run complete. I kept the decision review-bound.';
   const clean = cleanEvidenceText(text);
@@ -1833,7 +1833,7 @@ function renderThinkingLoader(message = {}) {
 
 function renderAssistantTurn(message = {}) {
   const canRun = Boolean(chatRunReadiness?.runnable);
-  const smartIntakeUnavailable = /Compass gateway is not configured|Smart intake received an invalid Compass response/i.test(message.text || '');
+  const smartIntakeUnavailable = /Compass gateway is not configured|Smart intake (?:received an invalid Compass response|could not get valid Compass JSON)/i.test(message.text || '');
   const question = assistantQuestionFromText(message.text);
   const acknowledgement = assistantAcknowledgement(message.text);
   return window.P42AppModules.chatUi.renderAssistantTurn(message, {
@@ -3128,6 +3128,35 @@ async function runAgent(payload, options = {}) {
   }
 }
 
+function startChatThinkingProgress(message = {}, options = {}) {
+  const councilMode = Boolean(options.forceRun);
+  const steps = councilMode
+    ? [
+        { delay: 0, title: 'Checking readiness', detail: 'Reviewing the case draft and human approval boundary.', attempt: '' },
+        { delay: 1200, title: 'Retrieving evidence', detail: 'Looking up citation-ready evidence and governed memory before council execution.', attempt: '' },
+        { delay: 2600, title: 'Running council', detail: 'Specialists are validating obligations, evidence, controls, and Responsible AI constraints.', attempt: '' },
+        { delay: 4300, title: 'Formulating decision room', detail: 'Preparing the executive memo, required actions, and audit handoff.', attempt: '' }
+      ]
+    : [
+        { delay: 0, title: 'Thinking', detail: 'Sending the full conversation context to Compass GPT-5.1 for smart intake.', attempt: 'Compass attempt 1' },
+        { delay: 1300, title: 'Analysing', detail: 'Validating the structured intake plan and extracted case updates.', attempt: 'Compass attempt 1' },
+        { delay: 3000, title: 'Retrying if needed', detail: 'If the first response is slow or malformed, retrying with a compact JSON-only prompt.', attempt: 'Compass attempt 2 if needed' },
+        { delay: 5200, title: 'Final verification', detail: 'Making a final Compass attempt before surfacing an administrator-visible intake issue.', attempt: 'Compass attempt 3 if needed' }
+      ];
+  message.thinkingSteps = steps.map((step) => [step.title, step.detail]);
+  const timers = steps.map((step, index) => window.setTimeout(() => {
+    if (!message.pending) return;
+    message.thinkingStepIndex = index;
+    message.phaseTitle = step.title;
+    message.phaseDetail = step.detail;
+    message.attemptLabel = step.attempt;
+    renderChatMessages();
+  }, step.delay));
+  return function stopChatThinkingProgress() {
+    timers.forEach((timer) => window.clearTimeout(timer));
+  };
+}
+
 async function submitChatMessage(rawMessage = '', options = {}) {
   const message = cleanEvidenceText(rawMessage || (options.forceRun ? 'run it' : ''));
   if (!message) {
@@ -3147,10 +3176,17 @@ async function submitChatMessage(rawMessage = '', options = {}) {
     text: options.forceRun
       ? 'Checking the case draft and executing the workflow if the required context is present...'
       : 'Reading the request, updating the case draft, and planning the next agent step...',
-    pending: true
+    pending: true,
+    thinkingStepIndex: 0,
+    phaseTitle: options.forceRun ? 'Checking readiness' : 'Thinking',
+    phaseDetail: options.forceRun
+      ? 'Reviewing the case draft and human approval boundary.'
+      : 'Sending the full conversation context to Compass GPT-5.1 for smart intake.',
+    attemptLabel: options.forceRun ? '' : 'Compass attempt 1'
   };
   chatMessages.push(pendingMessage);
   renderChatMessages();
+  const stopThinkingProgress = startChatThinkingProgress(pendingMessage, options);
   chatInput.value = '';
   sampleRun.disabled = true;
   chatRunNow.disabled = true;
@@ -3222,6 +3258,7 @@ async function submitChatMessage(rawMessage = '', options = {}) {
     renderRun({ ok: false, message: messageText });
     return null;
   } finally {
+    stopThinkingProgress();
     sampleRun.disabled = false;
     chatRunNow.disabled = chatRunReadiness ? !chatRunReadiness.runnable : false;
     chatForm.querySelector('button[type="submit"]').disabled = false;

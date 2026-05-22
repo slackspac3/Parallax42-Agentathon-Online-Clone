@@ -72,12 +72,17 @@ test('conversation LLM assessor treats Compass gateway errors as visible smart i
       P42_ADMIN_FEATURE_CONFIG_PATH: featureConfigPath(),
       COMPASS_GATEWAY_BASE_URL: 'https://gateway.example/api',
       COMPASS_GATEWAY_TOKEN: 'test-token',
-      CONVERSATION_LLM_MODEL: 'gpt-5.1'
+      CONVERSATION_LLM_MODEL: 'gpt-5.1',
+      CONVERSATION_LLM_MAX_ATTEMPTS: '3'
     }, async () => {
+      let calls = 0;
       global.fetch = async () => ({
         ok: false,
         status: 502,
-        text: async () => 'bad gateway'
+        text: async () => {
+          calls += 1;
+          return 'bad gateway';
+        }
       });
 
       const result = await assessConversationWithLlm({
@@ -90,6 +95,76 @@ test('conversation LLM assessor treats Compass gateway errors as visible smart i
       assert.equal(result.llmAssessment.requiresCompass, true);
       assert.equal(result.llmAssessment.smartIntakeUnavailable, true);
       assert.match(result.llmAssessment.detail, /bad gateway|502/i);
+      assert.equal(calls, 3);
+      assert.equal(result.llmAssessment.attemptCount, 3);
+      assert.equal(result.llmAssessment.attempts.length, 3);
+      assert.equal(result.llmAssessment.attempts[0].retryable, true);
+      assert.equal(result.llmAssessment.attempts[2].retryable, false);
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('conversation LLM assessor retries transient Compass failure before succeeding', async () => {
+  const originalFetch = global.fetch;
+  try {
+    await withEnv({
+      P42_ADMIN_FEATURE_CONFIG_PATH: featureConfigPath(),
+      COMPASS_GATEWAY_BASE_URL: 'https://gateway.example/api',
+      COMPASS_GATEWAY_TOKEN: 'test-token',
+      CONVERSATION_LLM_MODEL: 'gpt-5.1',
+      CONVERSATION_LLM_MAX_ATTEMPTS: '3'
+    }, async () => {
+      let calls = 0;
+      global.fetch = async () => {
+        calls += 1;
+        if (calls === 1) {
+          return {
+            ok: false,
+            status: 503,
+            text: async () => 'temporarily unavailable'
+          };
+        }
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            model: 'gpt-5.1',
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  intent: 'case_context',
+                  requestType: 'supplier_risk',
+                  workflowType: 'supplier_risk_review',
+                  reviewTarget: 'integration partner',
+                  recommendedFirstAction: 'ask_geography',
+                  conversationStage: 'asking_clarification',
+                  assistantSummary: 'This is an integration partner review.',
+                  confidence: 0.82,
+                  nextBestQuestion: 'Which geography applies?',
+                  caseUpdate: {
+                    integrations: ['Oracle ERP'],
+                    riskSignals: ['privileged access']
+                  }
+                })
+              }
+            }]
+          })
+        };
+      };
+
+      const result = await assessConversationWithLlm({
+        message: 'Assess an integration partner with privileged Oracle ERP access.'
+      });
+
+      assert.equal(result.llmAssessment.used, true);
+      assert.equal(result.llmAssessment.attemptCount, 2);
+      assert.equal(result.llmAssessment.retried, true);
+      assert.equal(result.llmAssessment.attempts[0].status, 'failed');
+      assert.equal(result.llmAssessment.attempts[0].httpStatus, 503);
+      assert.equal(result.llmAssessment.attempts[1].status, 'success');
+      assert.ok(result.caseDraft.riskSignals.includes('privileged access'));
     });
   } finally {
     global.fetch = originalFetch;
@@ -160,7 +235,8 @@ test('conversation LLM assessor requests JSON mode and handles OpenAI response o
       P42_ADMIN_FEATURE_CONFIG_PATH: featureConfigPath(),
       COMPASS_GATEWAY_BASE_URL: 'https://gateway.example/api',
       COMPASS_GATEWAY_TOKEN: 'test-token',
-      CONVERSATION_LLM_MODEL: 'gpt-5.1'
+      CONVERSATION_LLM_MODEL: 'gpt-5.1',
+      CONVERSATION_LLM_MAX_ATTEMPTS: '2'
     }, async () => {
       global.fetch = async (url, options) => {
         const body = JSON.parse(options.body);
@@ -219,7 +295,8 @@ test('conversation LLM assessor sends full chat context for terse answer interpr
       P42_ADMIN_FEATURE_CONFIG_PATH: featureConfigPath(),
       COMPASS_GATEWAY_BASE_URL: 'https://gateway.example/api',
       COMPASS_GATEWAY_TOKEN: 'test-token',
-      CONVERSATION_LLM_MODEL: 'gpt-5.1'
+      CONVERSATION_LLM_MODEL: 'gpt-5.1',
+      CONVERSATION_LLM_MAX_ATTEMPTS: '2'
     }, async () => {
       global.fetch = async (url, options) => {
         const body = JSON.parse(options.body);
@@ -283,7 +360,8 @@ test('conversation LLM assessor reports malformed Compass output accurately', as
       P42_ADMIN_FEATURE_CONFIG_PATH: featureConfigPath(),
       COMPASS_GATEWAY_BASE_URL: 'https://gateway.example/api',
       COMPASS_GATEWAY_TOKEN: 'test-token',
-      CONVERSATION_LLM_MODEL: 'gpt-5.1'
+      CONVERSATION_LLM_MODEL: 'gpt-5.1',
+      CONVERSATION_LLM_MAX_ATTEMPTS: '2'
     }, async () => {
       let calls = 0;
       global.fetch = async () => ({
@@ -309,6 +387,7 @@ test('conversation LLM assessor reports malformed Compass output accurately', as
       assert.equal(result.llmAssessment.invalidCompassResponse, true);
       assert.equal(result.llmAssessment.requiresCompass, false);
       assert.match(result.llmAssessment.detail, /not valid JSON/i);
+      assert.equal(result.llmAssessment.attemptCount, 2);
     });
   } finally {
     global.fetch = originalFetch;
@@ -495,6 +574,79 @@ test('conversation result exposes Compass assessment as advisory intake metadata
   assert.equal(result.nlp.llmAssessment.requestType, 'payroll_outsourcing');
   assert.equal(result.nlp.llmAssessment.conversationStage, 'asking_clarification');
   assert.ok(result.actions.some((action) => action.id === 'llm_intake_assessment' && action.status === 'complete'));
+});
+
+test('conversation result keeps AI-supplied owner when deterministic enrichment only infers a generic owner', () => {
+  const result = processConversation({
+    message: 'Assess a managed integration partner connecting Oracle ERP, Workday, ServiceNow, SharePoint, and Snowflake with privileged implementation access.',
+    caseDraft: {
+      brief: 'Assess a managed integration partner.',
+      businessUnit: 'Platform Team',
+      geography: 'UAE and India',
+      llmIntake: {
+        used: true,
+        requestType: 'vendor_onboarding',
+        workflowType: 'procurement_vendor_review',
+        reviewTarget: 'managed integration partner'
+      }
+    },
+    llmAssessment: {
+      provider: 'compass_gateway',
+      model: 'gpt-5.1',
+      used: true,
+      advisoryOnly: true,
+      intent: 'case_context',
+      requestType: 'vendor_onboarding',
+      workflowType: 'procurement_vendor_review',
+      reviewTarget: 'managed integration partner',
+      recommendedFirstAction: 'ask_evidence',
+      conversationStage: 'asking_clarification',
+      assistantSummary: 'This remains a platform-owned integration partner review.',
+      confidence: 0.9,
+      attemptCount: 1,
+      maxAttempts: 3
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.equal(result.caseDraft.businessUnit, 'Platform Team');
+  assert.equal(result.caseDraft.geography, 'UAE and India');
+  assert.ok(result.caseDraft.integrations.includes('Payroll/HRIS'));
+  assert.ok(result.caseDraft.integrations.includes('ServiceNow'));
+  assert.ok(result.actions.find((action) => action.id === 'llm_intake_assessment').detail.includes('Compass attempts: 1/3'));
+});
+
+test('conversation result still accepts explicit terse owner correction over previous generic owner', () => {
+  const result = processConversation({
+    message: 'Platform team',
+    caseDraft: {
+      brief: 'Assess a managed integration partner.',
+      businessUnit: 'Group Technology Risk',
+      questions: ['Who is the accountable business unit or workflow owner?'],
+      llmIntake: {
+        used: true,
+        requestType: 'vendor_onboarding',
+        workflowType: 'procurement_vendor_review'
+      }
+    },
+    llmAssessment: {
+      provider: 'compass_gateway',
+      model: 'gpt-5.1',
+      used: true,
+      advisoryOnly: true,
+      intent: 'owner_answer',
+      requestType: 'vendor_onboarding',
+      workflowType: 'procurement_vendor_review',
+      recommendedFirstAction: 'ask_geography',
+      conversationStage: 'asking_clarification',
+      assistantSummary: 'The platform team owns this review.',
+      confidence: 0.9,
+      attemptCount: 1,
+      maxAttempts: 3
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.equal(result.caseDraft.businessUnit, 'Platform Team');
+  assert.ok(!result.questions.some((question) => /owner/i.test(question)));
 });
 
 test('conversation result surfaces Compass outage instead of asking deterministic fallback questions', () => {
