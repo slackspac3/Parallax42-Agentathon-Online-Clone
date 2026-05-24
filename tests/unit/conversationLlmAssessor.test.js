@@ -11,6 +11,7 @@ const {
   SMART_INTAKE_INVALID_RESPONSE_MESSAGE,
   SMART_INTAKE_UNAVAILABLE_MESSAGE,
   assessConversationWithLlm,
+  buildRollingConversationSummary,
   extractChatContent,
   retryDelayMs
 } = require('../../lib/conversationLlmAssessor');
@@ -527,7 +528,7 @@ test('conversation LLM assessor sends full chat context for terse answer interpr
   }
 });
 
-test('conversation LLM assessor sends only the latest six chat turns with latest user message last', async () => {
+test('conversation LLM assessor sends the configured recent chat turns with latest user message last', async () => {
   const originalFetch = global.fetch;
   try {
     await withEnv({
@@ -553,11 +554,11 @@ test('conversation LLM assessor sends only the latest six chat turns with latest
         const body = JSON.parse(options.body);
         const prompt = JSON.parse(body.messages[1].content);
         const chatMessages = body.messages.slice(2);
-        assert.equal(prompt.recentConversationTurnCount, 6);
-        assert.equal(chatMessages.length, 6);
-        assert.deepEqual(chatMessages.map((item) => item.role), ['assistant', 'user', 'assistant', 'user', 'assistant', 'user']);
-        assert.match(chatMessages[0].content, /geography/i);
-        assert.match(chatMessages[4].content, /source evidence/i);
+        assert.equal(prompt.recentConversationTurnCount, 11);
+        assert.equal(chatMessages.length, 11);
+        assert.deepEqual(chatMessages.map((item) => item.role), ['user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user', 'assistant', 'user']);
+        assert.match(chatMessages[0].content, /old turn 1/i);
+        assert.match(chatMessages[9].content, /source evidence/i);
         assert.deepEqual(chatMessages.at(-1), { role: 'user', content: 'DPA is uploaded' });
         return {
           ok: true,
@@ -598,6 +599,240 @@ test('conversation LLM assessor sends only the latest six chat turns with latest
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test('30-turn conversation keeps early owner and geography facts via memory summary', async () => {
+  const originalFetch = global.fetch;
+  try {
+    await withEnv({
+      P42_ADMIN_FEATURE_CONFIG_PATH: featureConfigPath(),
+      COMPASS_GATEWAY_BASE_URL: 'https://gateway.example/api',
+      COMPASS_GATEWAY_TOKEN: 'test-token',
+      CONVERSATION_LLM_MODEL: 'gpt-5.1'
+    }, async () => {
+      const history = [
+        { role: 'assistant', text: 'Who is the accountable business owner?' },
+        { role: 'user', text: 'Platform team' },
+        { role: 'assistant', text: 'Which geography applies?' },
+        { role: 'user', text: 'UAE' }
+      ];
+      for (let index = 1; index <= 25; index += 1) {
+        history.push({
+          role: index % 2 ? 'assistant' : 'user',
+          text: index % 2 ? `Follow-up ${index}: please confirm another implementation detail.` : `Implementation detail ${index} is still being checked.`
+        });
+      }
+      history.push({ role: 'user', text: 'The SOC 2 is uploaded.' });
+
+      assert.equal(history.length, 30);
+      global.fetch = async (url, options) => {
+        const body = JSON.parse(options.body);
+        const prompt = JSON.parse(body.messages[1].content);
+        const chatMessages = body.messages.slice(2);
+
+        assert.equal(prompt.recentConversationTurnCount, 12);
+        assert.match(prompt.memorySummary, /Platform team/i);
+        assert.match(prompt.memorySummary, /UAE/i);
+        assert.match(prompt.currentDraft.memorySummary, /Platform team/i);
+        assert.ok(!chatMessages.some((message) => /Platform team|Which geography applies|UAE/.test(message.content)));
+        assert.equal(chatMessages.length, 12);
+        assert.deepEqual(chatMessages.at(-1), { role: 'user', content: 'The SOC 2 is uploaded.' });
+
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            model: 'gpt-5.1',
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  intent: 'evidence_answer',
+                  requestType: 'vendor_onboarding',
+                  workflowType: 'procurement_vendor_review',
+                  recommendedFirstAction: 'run_council',
+                  conversationStage: 'ready_for_council',
+                  assistantSummary: 'SOC 2 evidence is uploaded.',
+                  naturalResponse: 'I have the earlier platform owner and UAE geography in memory, and I will use the uploaded SOC 2 evidence.',
+                  confidence: 0.9,
+                  caseUpdate: {
+                    evidenceSignals: ['SOC 2 uploaded']
+                  }
+                })
+              }
+            }]
+          })
+        };
+      };
+
+      const result = await assessConversationWithLlm({
+        message: 'The SOC 2 is uploaded.',
+        eventType: 'user_answer',
+        history
+      });
+
+      assert.equal(result.llmAssessment.used, true);
+      assert.match(result.caseDraft.memorySummary, /Platform team/i);
+      assert.match(result.caseDraft.memorySummary, /UAE/i);
+      assert.equal(result.caseDraft.conversationHistory.length, 20);
+      assert.ok(!result.caseDraft.conversationHistory.some((turn) => /Platform team|Which geography applies/.test(turn.text)));
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('terse answer after long history still resolves the active question', async () => {
+  const originalFetch = global.fetch;
+  try {
+    await withEnv({
+      P42_ADMIN_FEATURE_CONFIG_PATH: featureConfigPath(),
+      COMPASS_GATEWAY_BASE_URL: 'https://gateway.example/api',
+      COMPASS_GATEWAY_TOKEN: 'test-token',
+      CONVERSATION_LLM_MODEL: 'gpt-5.1'
+    }, async () => {
+      const history = [];
+      for (let index = 1; index <= 28; index += 1) {
+        history.push({
+          role: index % 2 ? 'user' : 'assistant',
+          text: index % 2 ? `Earlier case note ${index}` : `Earlier assistant follow-up ${index}?`
+        });
+      }
+      history.push({ role: 'assistant', text: 'Who is the accountable business owner?' });
+      history.push({ role: 'user', text: 'Platform team' });
+
+      global.fetch = async (url, options) => {
+        const body = JSON.parse(options.body);
+        const prompt = JSON.parse(body.messages[1].content);
+        assert.equal(prompt.latestMessage, 'Platform team');
+        assert.equal(prompt.activeQuestion, 'Who is the accountable business owner?');
+        assert.match(prompt.memorySummary, /Accountable owner: Platform team/i);
+        assert.deepEqual(body.messages.at(-1), { role: 'user', content: 'Platform team' });
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            model: 'gpt-5.1',
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  intent: 'owner_answer',
+                  requestType: 'vendor_onboarding',
+                  workflowType: 'procurement_vendor_review',
+                  recommendedFirstAction: 'ask_geography',
+                  conversationStage: 'asking_clarification',
+                  assistantSummary: 'The platform team owns this review.',
+                  naturalResponse: 'The platform team is now recorded as accountable owner. Which geography applies?',
+                  confidence: 0.91,
+                  caseUpdate: {
+                    businessUnit: 'Platform team'
+                  }
+                })
+              }
+            }]
+          })
+        };
+      };
+
+      const result = await assessConversationWithLlm({
+        message: 'Platform team',
+        eventType: 'user_answer',
+        activeQuestion: 'Who is the accountable business owner?',
+        history
+      });
+
+      assert.equal(result.llmAssessment.intent, 'owner_answer');
+      assert.equal(result.caseDraft.businessUnit, 'Platform team');
+      assert.match(result.caseDraft.memorySummary, /Platform team/i);
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('conversation LLM prompt context does not include unbounded raw document text', async () => {
+  const originalFetch = global.fetch;
+  try {
+    await withEnv({
+      P42_ADMIN_FEATURE_CONFIG_PATH: featureConfigPath(),
+      COMPASS_GATEWAY_BASE_URL: 'https://gateway.example/api',
+      COMPASS_GATEWAY_TOKEN: 'test-token',
+      CONVERSATION_LLM_MODEL: 'gpt-5.1'
+    }, async () => {
+      const rawText = `${'raw document clause '.repeat(500)}RAW_DOCUMENT_SHOULD_NOT_APPEAR`;
+      const longSummary = `${'Agreement summary sentence. '.repeat(100)}SUMMARY_TAIL_SHOULD_BE_CLIPPED`;
+      global.fetch = async (url, options) => {
+        const body = JSON.parse(options.body);
+        const promptText = body.messages[1].content;
+        const prompt = JSON.parse(promptText);
+        assert.ok(!promptText.includes('RAW_DOCUMENT_SHOULD_NOT_APPEAR'));
+        assert.ok(!promptText.includes('SUMMARY_TAIL_SHOULD_BE_CLIPPED'));
+        assert.ok(prompt.currentDraft.documents[0].summary.length <= 900);
+        assert.equal(prompt.currentDraft.documents[0].title, 'Long Agreement');
+        return {
+          ok: true,
+          status: 200,
+          text: async () => JSON.stringify({
+            model: 'gpt-5.1',
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  intent: 'case_context',
+                  requestType: 'agreement_review',
+                  workflowType: 'contract_risk_review',
+                  recommendedFirstAction: 'ask_scope',
+                  conversationStage: 'document_uploaded',
+                  assistantSummary: 'The uploaded agreement metadata is available for intake.',
+                  naturalResponse: 'I can use the uploaded agreement metadata without moving raw document text through chat.',
+                  confidence: 0.88,
+                  caseUpdate: {
+                    documentTypes: ['agreement'],
+                    riskSignals: ['contractual risk']
+                  }
+                })
+              }
+            }]
+          })
+        };
+      };
+
+      const result = await assessConversationWithLlm({
+        message: 'Please review the uploaded agreement.',
+        eventType: 'evidence_uploaded',
+        caseDraft: {
+          documents: [{
+            title: 'Long Agreement',
+            documentType: 'agreement',
+            extractionStatus: 'backend_parsed',
+            summary: longSummary,
+            text: rawText,
+            excerpt: rawText
+          }]
+        }
+      });
+
+      assert.equal(result.llmAssessment.used, true);
+    });
+  } finally {
+    global.fetch = originalFetch;
+  }
+});
+
+test('rolling conversation summary is deterministic and bounded', () => {
+  const summary = buildRollingConversationSummary([
+    { role: 'assistant', text: 'Who is the accountable business owner?' },
+    { role: 'user', text: 'Platform team' },
+    { role: 'assistant', text: 'Which geography applies?' },
+    { role: 'user', text: 'UAE' },
+    { role: 'assistant', text: 'What source evidence should I use?' },
+    { role: 'user', text: 'The DPA is uploaded and SOC 2 is pending for Azure AD and Workday integration with personal data.' }
+  ], '');
+
+  assert.match(summary, /Accountable owner: Platform team/i);
+  assert.match(summary, /Geography: UAE/i);
+  assert.match(summary, /Documents: DPA; SOC 2/i);
+  assert.match(summary, /Integrations: Azure AD; Workday/i);
+  assert.match(summary, /Known unknowns: evidence unknown or pending/i);
+  assert.ok(summary.length <= 2500);
 });
 
 test('conversation LLM assessor reports malformed Compass output accurately', async () => {

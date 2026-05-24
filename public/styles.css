@@ -2697,6 +2697,7 @@ pre {
 }
 
 .audit-section,
+.admin-section,
 .hardening-section {
   margin-top: 28px;
   padding: 28px;
@@ -2718,6 +2719,181 @@ pre {
   grid-template-columns: 1.3fr 0.7fr;
   gap: 24px;
   margin-top: 20px;
+}
+
+.artifact-review-layout { grid-template-columns: 1fr; }
+
+.admin-console-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.72fr) minmax(360px, 1fr) minmax(340px, 0.9fr);
+  gap: 18px;
+  align-items: start;
+  margin-top: 20px;
+}
+
+.admin-main-stack {
+  display: grid;
+  gap: 14px;
+}
+
+.admin-summary-card,
+.admin-console-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  background:
+    linear-gradient(145deg, rgba(255,255,255,0.035), rgba(255,255,255,0.01)),
+    rgba(6, 12, 20, 0.88);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.035);
+}
+
+.admin-summary-card {
+  position: sticky;
+  top: 86px;
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.admin-summary-card strong,
+.admin-panel-heading strong,
+.admin-log-header strong {
+  display: block;
+  margin-top: 4px;
+  color: var(--text);
+  font-size: 15px;
+}
+
+.admin-summary-card p,
+.admin-panel-heading p,
+.admin-log-header p {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.admin-console-panel {
+  padding: 16px;
+}
+
+.admin-panel-heading {
+  display: grid;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.admin-log-panel {
+  min-height: 360px;
+}
+
+.admin-log-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 12px;
+}
+
+.admin-audit-log,
+.admin-log-list {
+  display: grid;
+  gap: 8px;
+}
+
+.audit-integrity-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0 2px;
+}
+
+.audit-integrity-row small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.audit-integrity-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.audit-integrity-pill.is-ok {
+  border-color: rgba(34,227,180,0.28);
+  background: rgba(34,227,180,0.07);
+  color: var(--accent);
+}
+
+.audit-integrity-pill.is-broken {
+  border-color: rgba(248,113,113,0.3);
+  background: rgba(248,113,113,0.07);
+  color: var(--danger);
+}
+
+.admin-log-row {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: rgba(255,255,255,0.025);
+}
+
+.admin-log-row.is-empty,
+.admin-log-row.is-auth,
+.admin-log-row.is-broken {
+  background: rgba(255,255,255,0.02);
+}
+
+.admin-log-row.is-auth {
+  border-color: rgba(251,191,36,0.25);
+}
+
+.admin-log-row.is-broken {
+  border-color: rgba(248,113,113,0.28);
+}
+
+.admin-log-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.admin-log-meta span {
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.045);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.admin-log-row strong {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.admin-log-row p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.admin-log-row small {
+  color: var(--info);
+  font-size: 11px;
+  word-break: break-word;
 }
 
 .hardening-layout {
@@ -3132,7 +3308,8 @@ pre {
   .runway { border-top: 1px solid var(--line); }
   .chat-messages { min-height: 320px; }
 
-  .evidence-layout, .artifact-layout, .hardening-layout { grid-template-columns: 1fr; }
+  .evidence-layout, .artifact-layout, .admin-console-layout, .hardening-layout { grid-template-columns: 1fr; }
+  .admin-summary-card { position: static; }
   .hardening-list { grid-template-columns: repeat(2, 1fr); }
 }
 
@@ -3157,6 +3334,7 @@ pre {
   .decision-rail,
   .evidence-board,
   .audit-section,
+  .admin-section,
   .hardening-section { padding: 18px; }
 
   .mode-tabs { flex-wrap: wrap; }
@@ -3174,6 +3352,7 @@ pre {
   .domain-row,
   .citation-row,
   .hardening-list,
+  .admin-status-grid,
   .specialist-list,
   body[data-run-mode="demo"] .specialist-list,
   body[data-run-mode="live"] .specialist-list,
@@ -5332,6 +5511,7 @@ pre {
 
   .evidence-board,
   .audit-section,
+  .admin-section,
   .hardening-section {
     display: none;
   }

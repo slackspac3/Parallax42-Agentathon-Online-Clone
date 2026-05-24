@@ -113,6 +113,8 @@ const deploymentStatus = document.querySelector('#deploymentStatus');
 const capabilityFallbacks = document.querySelector('#capabilityFallbacks');
 const adminStatusDashboard = document.querySelector('#adminStatusDashboard');
 const adminFeatureControls = document.querySelector('#adminFeatureControls');
+const adminAuditLog = document.querySelector('#adminAuditLog');
+const refreshAdminAuditLog = document.querySelector('#refreshAdminAuditLog');
 const readinessJsonLink = document.querySelector('#readinessJsonLink');
 const benchmarksJsonLink = document.querySelector('#benchmarksJsonLink');
 const goldenDemoLink = document.querySelector('#goldenDemoLink');
@@ -315,6 +317,10 @@ function escapeHtml(value = '') {
     .replaceAll('>', '&gt;')
     .replaceAll('"', '&quot;')
     .replaceAll("'", '&#039;');
+}
+
+function cleanText(value = '') {
+  return String(value || '').replace(/\s+/g, ' ').trim();
 }
 
 function readStorage(key, fallback = '') {
@@ -3472,6 +3478,7 @@ async function runAgent(payload, options = {}) {
     });
     if (runMode !== activeRunMode) {
       lastRuns[runMode] = result;
+      loadAuditLog();
       return result;
     }
     if (options.playback) {
@@ -3479,6 +3486,7 @@ async function runAgent(payload, options = {}) {
     } else {
       renderRun(result);
     }
+    loadAuditLog();
     return result;
   } catch (error) {
     const failure = {
@@ -3487,9 +3495,11 @@ async function runAgent(payload, options = {}) {
     };
     if (runMode !== activeRunMode) {
       lastRuns[runMode] = failure;
+      loadAuditLog();
       return failure;
     }
     renderRun(failure);
+    loadAuditLog();
     return failure;
   } finally {
     sampleRun.disabled = false;
@@ -3676,6 +3686,7 @@ async function submitChatMessage(rawMessage = '', options = {}) {
       lastRuns.chat = result.run;
       lastRun = result.run;
       playResult(result.run);
+      loadAuditLog();
     } else {
       renderConversationState(result);
     }
@@ -3781,6 +3792,7 @@ async function recordHumanReview() {
     approvalButton.textContent = 'Human review recorded';
     approvalButton.disabled = true;
     approvalButton.removeAttribute('data-review-action');
+    loadAuditLog();
   } catch (error) {
     approvalButton.textContent = 'Review not recorded';
     window.setTimeout(() => {
@@ -3830,6 +3842,111 @@ async function loadBenchmarks() {
         <p>${escapeHtml(error instanceof Error ? error.message : 'unavailable')}</p>
       </article>
     `;
+  }
+}
+
+function formatAuditTimestamp(value = '') {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return cleanText(value) || 'unknown time';
+  return date.toLocaleString(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+function shortAuditHash(value = '') {
+  const hash = cleanText(value);
+  return hash ? `${hash.slice(0, 10)}...` : '';
+}
+
+function renderAuditIntegrity(integrity = {}) {
+  const ok = Boolean(integrity.ok);
+  const className = ok ? 'is-ok' : 'is-broken';
+  const label = ok ? 'integrity ok' : 'integrity broken';
+  const detail = ok
+    ? `${Number(integrity.count || 0)} chained records`
+    : `${cleanText(integrity.reason || 'verification failed')}${integrity.brokenAt ? ` at #${integrity.brokenAt}` : ''}`;
+  return `
+    <div class="audit-integrity-row">
+      <span class="audit-integrity-pill ${className}">${label}</span>
+      <small>${escapeHtml(detail)}</small>
+    </div>
+  `;
+}
+
+function renderAuditRecord(record = {}) {
+  if (record.malformed) {
+    return `
+      <article class="admin-log-row is-broken">
+        <div>
+          <strong>Malformed audit record</strong>
+          <p>One audit line could not be parsed.</p>
+        </div>
+      </article>
+    `;
+  }
+  const actor = record.actor?.username || record.actor?.id || 'system';
+  const sequence = record.integrity?.sequence ? `#${record.integrity.sequence}` : '';
+  const hash = shortAuditHash(record.integrity?.recordHash);
+  return `
+    <article class="admin-log-row">
+      <div class="admin-log-meta">
+        <span>${escapeHtml(formatAuditTimestamp(record.timestamp))}</span>
+        <span>${escapeHtml(actor)}</span>
+        <span>${escapeHtml(record.status || 'recorded')}</span>
+      </div>
+      <strong>${escapeHtml(record.caseId || 'no case id')}</strong>
+      <p>${escapeHtml(record.summary || 'Audit event recorded.')}</p>
+      ${(sequence || hash) ? `<small>${escapeHtml(sequence)}${sequence && hash ? ' · ' : ''}${escapeHtml(hash)}</small>` : ''}
+    </article>
+  `;
+}
+
+function renderAuditLog(payload = {}) {
+  if (!adminAuditLog) return;
+  const records = Array.isArray(payload.records) ? payload.records.slice().reverse() : [];
+  if (!records.length) {
+    adminAuditLog.innerHTML = `
+      ${renderAuditIntegrity(payload.integrity || {})}
+      <article class="admin-log-row is-empty">
+        <strong>No audit records yet</strong>
+        <p>Run the council or update admin controls to create audit events.</p>
+      </article>
+    `;
+    return;
+  }
+  adminAuditLog.innerHTML = `
+    ${renderAuditIntegrity(payload.integrity || {})}
+    <div class="admin-log-list">
+      ${records.map(renderAuditRecord).join('')}
+    </div>
+  `;
+}
+
+async function loadAuditLog() {
+  if (!adminAuditLog) return null;
+  adminAuditLog.innerHTML = `
+    <article class="admin-log-row is-empty">
+      <strong>Loading audit log</strong>
+      <p>Checking the latest hash-chained audit records...</p>
+    </article>
+  `;
+  try {
+    const payload = await apiFetch('/api/audit/recent?limit=20');
+    renderAuditLog(payload);
+    return payload;
+  } catch (error) {
+    const status = Number(error?.status || error?.body?.status || 0);
+    const authRequired = status === 401 || status === 403 || /unauthorized|forbidden|auth/i.test(error?.message || '');
+    adminAuditLog.innerHTML = `
+      <article class="admin-log-row ${authRequired ? 'is-auth' : 'is-broken'}">
+        <strong>${authRequired ? 'Admin auth required' : 'Audit log unavailable'}</strong>
+        <p>${escapeHtml(authRequired ? 'Sign in with an admin or audit role to view recent audit records.' : error instanceof Error ? error.message : 'Could not load audit records.')}</p>
+      </article>
+    `;
+    return null;
   }
 }
 
@@ -4045,6 +4162,7 @@ async function setAdminFeature(featureId, enabled) {
     });
     renderAdminFeatureControls(status);
     await loadDeploymentStatus();
+    await loadAuditLog();
   } catch (error) {
     if (button) {
       button.disabled = false;
@@ -4299,6 +4417,7 @@ runtimeConfig.addEventListener('submit', (event) => {
   loadDeploymentStatus();
   loadReadiness();
   loadBenchmarks();
+  loadAuditLog();
 });
 
 resetConfig.addEventListener('click', () => {
@@ -4309,6 +4428,7 @@ resetConfig.addEventListener('click', () => {
   loadDeploymentStatus();
   loadReadiness();
   loadBenchmarks();
+  loadAuditLog();
 });
 
 adminFeatureControls?.addEventListener('click', (event) => {
@@ -4317,6 +4437,10 @@ adminFeatureControls?.addEventListener('click', (event) => {
   const featureId = button.dataset.featureToggle;
   const current = adminFeatureState?.features?.find((feature) => feature.id === featureId);
   setAdminFeature(featureId, !(current?.enabled));
+});
+
+refreshAdminAuditLog?.addEventListener('click', () => {
+  loadAuditLog();
 });
 
 sampleRun.addEventListener('click', () => {
@@ -4440,4 +4564,5 @@ restoreEvidenceIndexFromStorage().then(() => {
 loadDeploymentStatus();
 loadReadiness();
 loadBenchmarks();
+loadAuditLog();
 animateNetwork();

@@ -21,6 +21,7 @@
         <a href="#run">Agent</a>
         <a href="#evidence">Evidence</a>
         <a href="#audit">Audit Pack</a>
+        <a href="#admin" id="adminNavLink">Admin</a>
         <a href="#hardening">Hardening</a>
       </nav>
       <div class="topbar-status">
@@ -339,14 +340,34 @@
           <span class="eyebrow">Submission pack</span>
           <h2>Artifacts a reviewer can inspect</h2>
         </div>
-        <div class="artifact-layout">
+        <div class="artifact-layout artifact-review-layout">
           <div id="artifactPreview" class="artifact-preview"></div>
-          <div>
-            <div class="board-label">Live services</div>
+        </div>
+      </section>
+
+      <section class="admin-section" id="admin">
+        <div class="section-heading">
+          <span class="eyebrow">Admin Console</span>
+          <h2>Settings, runtime health, and audit logs</h2>
+        </div>
+        <div class="admin-console-layout">
+          <aside class="admin-summary-card">
+            <div>
+              <span class="eyebrow">Live services</span>
+              <strong>Deployment and fallbacks</strong>
+              <p>Operational status and degradation notes are safe summaries only; secrets and raw environment values are never shown.</p>
+            </div>
             <div id="deploymentStatus" class="status-list" aria-live="polite"></div>
             <div id="capabilityFallbacks" class="capability-fallbacks" aria-live="polite"></div>
-            <details class="advanced-config">
-              <summary>Advanced runtime settings</summary>
+          </aside>
+
+          <div class="admin-main-stack">
+            <section class="admin-console-panel">
+              <div class="admin-panel-heading">
+                <span class="eyebrow">Runtime settings</span>
+                <strong>API routing</strong>
+                <p>Switch between local, relay, and live backend views for operator testing.</p>
+              </div>
               <form id="runtimeConfig" class="config-panel">
                 <label>
                   API mode
@@ -370,24 +391,38 @@
                   <button type="button" id="resetConfig" class="secondary-button">Reset</button>
                 </div>
               </form>
-              <div class="admin-status-panel">
-                <div>
-                  <span class="eyebrow">Runtime status</span>
-                  <strong>Admin readiness</strong>
-                  <p>Safe configuration signals only; no secrets or raw environment values are exposed.</p>
-                </div>
-                <div id="adminStatusDashboard" class="admin-status-grid" aria-live="polite"></div>
+            </section>
+
+            <section class="admin-console-panel">
+              <div class="admin-panel-heading">
+                <span class="eyebrow">Runtime status</span>
+                <strong>Admin readiness</strong>
+                <p>Safe configuration signals only; no secrets or raw environment values are exposed.</p>
               </div>
-              <div class="admin-feature-panel">
-                <div>
-                  <span class="eyebrow">Admin controls</span>
-                  <strong>Capability switches</strong>
-                  <p>All advanced components are requested by default and degrade safely when configuration is absent.</p>
-                </div>
-                <div id="adminFeatureControls" class="feature-toggle-list" aria-live="polite"></div>
+              <div id="adminStatusDashboard" class="admin-status-grid" aria-live="polite"></div>
+            </section>
+
+            <section class="admin-console-panel">
+              <div class="admin-panel-heading">
+                <span class="eyebrow">Feature controls</span>
+                <strong>Capability switches</strong>
+                <p>Advanced components are requested by default and degrade safely when configuration is absent.</p>
               </div>
-            </details>
+              <div id="adminFeatureControls" class="feature-toggle-list" aria-live="polite"></div>
+            </section>
           </div>
+
+          <section class="admin-console-panel admin-log-panel">
+            <div class="admin-log-header">
+              <div>
+                <span class="eyebrow">Audit log</span>
+                <strong>Recent audit records</strong>
+                <p>Latest hash-chained records from the local audit endpoint.</p>
+              </div>
+              <button type="button" id="refreshAdminAuditLog" class="secondary-button">Refresh logs</button>
+            </div>
+            <div id="adminAuditLog" class="admin-audit-log" aria-live="polite"></div>
+          </section>
         </div>
       </section>
 
