@@ -15,6 +15,7 @@ const {
   assessConversationWithLlm,
   buildRollingConversationSummary,
   extractChatContent,
+  normalizeAssessment,
   retryDelayMs
 } = require('../../lib/conversationLlmAssessor');
 
@@ -1494,6 +1495,27 @@ test('conversation LLM assessor preserves naturalResponse for chat response gene
   } finally {
     global.fetch = originalFetch;
   }
+});
+
+test('conversation LLM assessor preserves complete long follow-up questions', () => {
+  const nextBestQuestion = 'Within this SaaS master services agreement, what do you most need reviewed first: the service scope and deliverables, the data/privacy and model-training terms, or the security and access controls, including subprocessors and personnel onboarding/offboarding?';
+
+  const assessment = normalizeAssessment({
+    intent: 'case_context',
+    requestType: 'saas_agreement_review',
+    workflowType: 'contract_risk_review',
+    reviewTarget: 'Enterprise SaaS Master Services Agreement',
+    recommendedFirstAction: 'ask_scope',
+    conversationStage: 'document_uploaded',
+    assistantSummary: 'The uploaded agreement is ready for focused review.',
+    nextBestQuestion,
+    confidence: 0.88
+  });
+
+  assert.equal(nextBestQuestion.length > 220, true);
+  assert.equal(assessment.nextBestQuestion, nextBestQuestion);
+  assert.match(assessment.nextBestQuestion, /\?$/);
+  assert.doesNotMatch(assessment.nextBestQuestion, /\b(?:a|and|or|including)\?$/i);
 });
 
 test('conversation LLM assessor allows complex natural prose beyond the old short clamp', async () => {

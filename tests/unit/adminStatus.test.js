@@ -67,6 +67,7 @@ test('buildAdminStatus exposes safe effective operational settings', async () =>
     CONVERSATION_LLM_STRUCTURED_MAX_TOKENS: '1111',
     CONVERSATION_LLM_NATURAL_MAX_TOKENS: '1234',
     CONVERSATION_LLM_NATURAL_RESPONSE_MAX_CHARS: '4321',
+    CONVERSATION_LLM_QUESTION_MAX_CHARS: '777',
     CONVERSATION_LLM_HISTORY_TURNS: '33',
     CONVERSATION_LLM_TURN_MAX_CHARS: '2222',
     CONVERSATION_LLM_RECENT_TURNS_FOR_PROMPT: '14',
@@ -101,7 +102,8 @@ test('buildAdminStatus exposes safe effective operational settings', async () =>
       structuredMaxTokens: 1111,
       retryStructuredMaxTokens: 1111,
       naturalResponseMaxTokens: 1234,
-      naturalResponseMaxChars: 4321
+      naturalResponseMaxChars: 4321,
+      questionMaxChars: 777
     });
     assert.deepEqual(status.settings.context, {
       historyTurns: 33,

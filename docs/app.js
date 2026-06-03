@@ -3035,8 +3035,8 @@ function assistantQuestionFromText(text = '') {
   const acceptableQuestion = (value = '') => {
     const candidate = cleanEvidenceText(value).replace(/^next question:\s*/i, '');
     if (!candidate || candidate.length < 12) return '';
-    if (candidate.endsWith('?')) return candidate;
-    if (/^(who|what|which|where|when|how|can|does|do|is|are|should)\b/i.test(candidate)) return candidate.endsWith('?') ? candidate : `${candidate}?`;
+    if (candidate.endsWith('?')) return normalizeAssistantQuestion(candidate);
+    if (/^(who|what|which|where|when|how|can|does|do|is|are|should|within)\b/i.test(candidate)) return normalizeAssistantQuestion(`${candidate}?`);
     return '';
   };
   const nextBlock = raw.split(/Next questions?:/i)[1] || '';
@@ -3053,16 +3053,29 @@ function structuredAssistantQuestion(...candidates) {
     const candidate = cleanEvidenceText(value).replace(/^next question:\s*/i, '');
     if (!candidate || candidate.length < 12) continue;
     if (candidate.endsWith('?')) return normalizeAssistantQuestion(candidate);
-    if (/^(who|what|which|where|when|how|can|does|do|is|are|should)\b/i.test(candidate)) {
+    if (/^(who|what|which|where|when|how|can|does|do|is|are|should|within)\b/i.test(candidate)) {
       return normalizeAssistantQuestion(`${candidate}?`);
     }
   }
   return '';
 }
 
+function isLikelyTruncatedQuestion(question = '') {
+  const text = cleanEvidenceText(question);
+  if (!text) return false;
+  const openParens = (text.match(/\(/g) || []).length;
+  const closeParens = (text.match(/\)/g) || []).length;
+  if (openParens > closeParens) return true;
+  if (/[,:;/-]\??$/.test(text)) return true;
+  if (/\b(?:a|an|and|or|the|with|for|from|of|to|in|on|including)\??$/i.test(text)) return true;
+  if (/\b[a-z]\??$/i.test(text) && !/\b(?:(?:option|choice|answer)\s+[abc]|[abc]\s+or\s+[abc])\??$/i.test(text)) return true;
+  return false;
+}
+
 function normalizeAssistantQuestion(question = '') {
   const text = cleanEvidenceText(question);
   if (!text) return text;
+  if (isLikelyTruncatedQuestion(text)) return '';
   const letters = text.replace(/[^a-z]/gi, '');
   const uppercase = letters.replace(/[^A-Z]/g, '');
   if (letters.length >= 8 && uppercase.length / letters.length > 0.72) {
@@ -3129,7 +3142,7 @@ function renderAssistantTurn(message = {}, options = {}) {
   const smartIntakeUnavailable = Boolean(message.smartIntakeUnavailable) || legacyUnavailableText;
   const smartIntakeDegraded = Boolean(message.smartIntakeDegraded);
   const smartIntakeDiagnostic = Boolean(message.smartIntakeDiagnostic || message.invalidCompassResponse);
-  const question = message.displayedQuestion || message.nextBestQuestion || assistantQuestionFromText(message.text);
+  const question = normalizeAssistantQuestion(message.displayedQuestion || message.nextBestQuestion) || assistantQuestionFromText(message.text);
   if (question && !message.displayedQuestion) message.displayedQuestion = question;
   const acknowledgement = assistantAcknowledgement(message.text);
   return window.P42AppModules.chatUi.renderAssistantTurn(message, {
