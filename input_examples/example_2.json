@@ -1,0 +1,49 @@
+{
+  "run_id": "eval-002",
+  "use_case_id": "21",
+  "input": {
+    "query": "Review an AI vendor that analyzes customer support tickets and may use submitted customer data for model improvement.",
+    "case": {
+      "case_id": "synthetic-ai-vendor-002",
+      "requester": "Customer Operations",
+      "business_unit": "Customer Operations",
+      "geography": "UAE and EU customers",
+      "supplier_name": "ClearReply AI",
+      "service_description": "AI support-ticket classifier and response suggestion tool using customer ticket text.",
+      "integrations": [
+        "CRM",
+        "support ticketing platform",
+        "single sign-on"
+      ],
+      "risk_signals": [
+        "AI vendor",
+        "customer data",
+        "model-training ambiguity",
+        "automated recommendations"
+      ],
+      "ai_use": "Classifier suggests ticket categories and draft responses for human agents.",
+      "model_training": "Vendor terms mention service improvement and model tuning, but the enterprise model-training exclusion is not executed."
+    },
+    "evidence": [
+      {
+        "id": "AI-DPA-01",
+        "title": "Draft DPA",
+        "text": "Draft DPA lists personal-data handling and subprocessors but remains unsigned pending legal review."
+      },
+      {
+        "id": "AI-TERMS-01",
+        "title": "AI product terms excerpt",
+        "text": "Terms say customer prompts and support tickets may be used for model improvement unless an enterprise opt-out is signed. No signed model-training exclusion is attached."
+      },
+      {
+        "id": "AI-SEC-01",
+        "title": "Security questionnaire",
+        "text": "Vendor states SSO, MFA, encryption in transit and at rest, audit logs, and quarterly vulnerability scanning."
+      }
+    ]
+  },
+  "options": {
+    "sample_mode": false,
+    "max_iterations": 3
+  }
+}

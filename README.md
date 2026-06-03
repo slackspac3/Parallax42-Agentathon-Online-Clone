@@ -17,7 +17,7 @@ Agent positioning: the system is intentionally **L2 governed autonomy**. It can 
 
 Memory is separated into scratchpad state, episodic audit/reviewer logs, and reusable advisory knowledge. Governed learning memory and reference intelligence can improve questions and reviewer suggestions, but they do not train a model or silently change the deterministic decision.
 
-The implementation now defaults agent execution through a dependency-light CrewAI Flow orchestration path with deterministic compliance decisions as the stable fallback. The stronger Parallax42 assets remain the source of truth for the live supplier-risk backend and are referenced in the submission dossier.
+The implementation defaults to deterministic compliance decisions, with CrewAI-shaped dry-run manifests and optional advisory integrations kept behind explicit configuration.
 
 ## Judge Quick Start
 
@@ -54,37 +54,77 @@ Suggested demo steps:
 3. Review the decision memo.
 4. Export Executive Review Pack PDF.
 
-For automated evaluator compatibility, this repository also exposes a thin Python wrapper around the same Node/CommonJS runtime:
+## Agentathon Evaluation
+
+Selected use case: **21 Legal Intelligence**.
+
+The existing product runtime is still the Node/CommonJS app under `server.js`, `api/`, `lib/`, and `public/`. For Agentathon screening, the repo root also includes a Python FastAPI wrapper that starts on `0.0.0.0:8000`, exposes `GET /health`, `GET /metadata`, `GET /logs`, `GET /compass/probe`, and `POST /run`, then delegates deterministic execution to `scripts/agentathon_run.js`.
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
 npm install
 python run.py
 ```
 
-Then, from another terminal:
+Call the evaluator path:
 
 ```bash
-curl -sS http://127.0.0.1:8000/health
-curl -sS -X POST http://127.0.0.1:8000/run \
-  -H "content-type: application/json" \
-  --data @input_examples/example_1_healthcare_analytics.json
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/run \
+  -H "Content-Type: application/json" \
+  -d @input_examples/example_1.json
 ```
 
-`run.py` does not introduce FastAPI or a second backend. It starts `server.js` on port `8000` so judges or automated screeners that expect `python run.py` and `POST /run` can exercise the same compliance engine. The same route is also available as `/api/run` in the Vercel API surface, with `/run` rewritten to it.
+Docker:
 
-Compass is already supported through the Parallax42 Compass gateway. For evaluator environments that provide direct OpenAI-compatible Compass variables, the same client also accepts:
+```bash
+docker build -t parallax42-agentathon .
+docker run --rm -p 8000:8000 \
+  -e SAMPLE_MODE=true \
+  -e OPENAI_BASE_URL=https://compass.core42.ai/v1 \
+  -e OPENAI_API_KEY=dummy \
+  parallax42-agentathon
+```
+
+Compass/OpenAI-compatible variables are placeholders in `.env.example`:
 
 ```text
-OPENAI_API_KEY=<Compass API key>
+OPENAI_API_KEY=replace-with-your-compass-api-key
 OPENAI_BASE_URL=https://compass.core42.ai/v1
-MODEL_NAME=gpt-4.1
-REASONING_MODEL_NAME=gpt-5.1
-EMBEDDING_MODEL_NAME=text-embedding-3-large
+MODEL_FAST=gpt-4.1
+MODEL_REASONING=gpt-5.1
+EMBEDDING_MODEL=text-embedding-3-large
+```
+
+No secrets are committed. `SAMPLE_MODE=true` is accepted for evaluator compatibility, but it does not switch to canned outputs; the wrapper still runs the deterministic Node rules engine. Live Compass, Qdrant, enforced RBAC, and live CrewAI are optional/configurable paths and are not claimed active unless those environment variables are set and separately verified.
+
+Known limitations: the Agentathon path returns structured JSON and trace logs, not the browser cockpit; the decision is a human-review compliance package, not legal advice or automatic approval; Qdrant and live advisory specialists are disabled by default.
+
+## Agentathon Preflight
+
+Run the local submission checks:
+
+```bash
+python scripts/agentathon_preflight.py
+python scripts/agentathon_preflight.py --run-api
+python scripts/agentathon_preflight.py --run-api --npm-qa
+python scripts/agentathon_preflight.py --docker
+```
+
+The Docker check requires a machine with Docker installed. Some local Codex environments do not include the Docker CLI; in that case `--docker` reports `SKIPPED` with the reason rather than failing the whole preflight.
+
+`SAMPLE_MODE=true` is a fallback/testing flag only. It must not be presented as live Compass execution, and it still runs the simplified deterministic Node rules path rather than returning canned output files. Final evaluation should provide:
+
+```text
+OPENAI_API_KEY=<real Compass key>
+OPENAI_BASE_URL=https://compass.core42.ai/v1
 ```
 
 ## What This Demo Does Not Claim
 
-- This repository is not a FastAPI backend.
+- The product runtime is not rewritten as Python; FastAPI is only the Agentathon evaluation wrapper.
 - This repository does not include Redis, Postgres, Celery, or durable queues.
 - Without the optional remote Python CrewAI service, the runtime degrades to deterministic decisioning plus CrewAI-shaped dry run.
 - Live LLM specialist output is optional and advisory.
@@ -102,7 +142,7 @@ Implemented in this repo:
 - `GET /api/readiness` submission-readiness inventory
 - `GET /api/health` runtime and linked-platform status
 - Vercel-compatible serverless API functions under `api/`
-- allowlisted browser relay to the live Parallax42 backend at `GET/POST /api/backend`
+- allowlisted browser relay for an optional configured Parallax42 backend at `GET/POST /api/backend`
 - GitHub Pages static cockpit with chat-first agent mode and advanced runtime controls
 - browser cockpit for conversational case building, agent execution, evidence, gaps, and trace events
 - CrewAI Flow adapter plus six role-specific agents and YAML task definitions
@@ -112,7 +152,7 @@ Implemented in this repo:
 - unit tests and syntax checks
 - initial G42 submission dossier under `docs/`
 
-Linked live assets already in place:
+Optional prior-demo endpoints, not required for Agentathon evaluation:
 
 - Parallax42 demo UI: `https://slackspac3.github.io/Parallax42/`
 - External Parallax42 backend health: `https://api.parallax42.bhavukarora.com/health`
@@ -139,7 +179,7 @@ http://127.0.0.1:3020
 npm run qa
 ```
 
-Run the live dependency check when you need localhost to prove it can reach the DigitalOcean backend, the local `/api/backend` relay, the Vercel Compass gateway, Qdrant config, and one real Compass GPT-5.1 smart-intake turn:
+Run the live dependency check only after configuring private live-service credentials and when you intentionally want to verify external backend, gateway, Qdrant, and Compass access:
 
 ```bash
 npm run qa:live
@@ -149,7 +189,7 @@ npm run qa:live
 
 ## Evidence Capture
 
-Capture live health snapshots, benchmark output, readiness inventory, and a sample agent trace:
+Capture health snapshots, benchmark output, readiness inventory, and a sample agent trace:
 
 ```bash
 npm run capture:evidence
@@ -171,39 +211,39 @@ The JSON limits can be overridden with `CONVERSATION_BODY_LIMIT_BYTES`, `EVIDENC
 - Serverless API: `api/`, deployable to Vercel.
 - Live backend proof: proxied through the allowlisted `/api/backend` relay.
 
-Key environment variables:
+Default-safe environment variables:
 
 ```text
-AGENT_RUNTIME=crewai_llm
-CREWAI_ENABLE_LIVE_LLM=1
+AGENT_RUNTIME=crewai_dry_run
+CREWAI_ENABLE_LIVE_LLM=0
 CREWAI_LLM_MODEL=gpt-5.1
-CREWAI_LLM_BASE_URL=https://parallax42-compass-gateway.vercel.app/api
-CREWAI_LLM_API_KEY=<same-value-as-COMPASS_GATEWAY_TOKEN>
-P42_CREWAI_SERVICE_URL=https://api.parallax42.bhavukarora.com/crewai
-P42_CREWAI_SERVICE_TOKEN=<server-side-service-token>
-PARALLAX42_BACKEND_URL=https://api.parallax42.bhavukarora.com
-COMPASS_GATEWAY_BASE_URL=https://parallax42-compass-gateway.vercel.app/api
-COMPASS_GATEWAY_TOKEN=<server-side gateway token required for smart chat intake>
+CREWAI_LLM_BASE_URL=
+CREWAI_LLM_API_KEY=
+P42_CREWAI_SERVICE_URL=
+P42_CREWAI_SERVICE_TOKEN=
+PARALLAX42_BACKEND_URL=
+COMPASS_GATEWAY_BASE_URL=
+COMPASS_GATEWAY_TOKEN=
 EMBEDDINGS_MODEL=text-embedding-3-large
 P42_REQUIRE_DURABLE_STORAGE=0
 P42_REFERENCE_CONTEXT_DIR=
-P42_VECTOR_STORE_PROVIDER=qdrant
+P42_VECTOR_STORE_PROVIDER=local
 # Full RAG requires these Qdrant values. Without them the runtime falls back to local-file demo storage.
 # QDRANT_URL=https://<cluster>.cloud.qdrant.io
 # QDRANT_API_KEY=<server-side-vector-db-key>
 # QDRANT_COLLECTION=p42_compliance_evidence
-P42_FEATURE_COMPASS_LLM_CALLS=1 # legacy admin visibility; smart intake is gated by COMPASS_GATEWAY_TOKEN
-P42_FEATURE_COMPASS_EMBEDDINGS=1
-P42_FEATURE_QDRANT_RAG=1
-P42_FEATURE_QDRANT_LEARNING_MEMORY=1
-P42_FEATURE_EXTERNAL_PARSER_RELAY=1
-P42_FEATURE_LIVE_ADVISORY_SPECIALISTS=1
-P42_FEATURE_LIVE_CREWAI=1
-P42_ALLOWED_ORIGINS=https://slackspac3.github.io,http://127.0.0.1:3020
+P42_FEATURE_COMPASS_LLM_CALLS=0
+P42_FEATURE_COMPASS_EMBEDDINGS=0
+P42_FEATURE_QDRANT_RAG=0
+P42_FEATURE_QDRANT_LEARNING_MEMORY=0
+P42_FEATURE_EXTERNAL_PARSER_RELAY=0
+P42_FEATURE_LIVE_ADVISORY_SPECIALISTS=0
+P42_FEATURE_LIVE_CREWAI=0
+P42_ALLOWED_ORIGINS=http://127.0.0.1:3020
 AGENT_AUDIT_DIR=/tmp/p42-compliance-intelligence-agent
 ```
 
-The advanced components are requested by default and can be switched off through `GET|PATCH /api/admin/features` or the cockpit's Advanced runtime settings panel. Smart chat intake requires `COMPASS_GATEWAY_TOKEN`; when it is absent or the gateway fails, the chat shows "Compass gateway is not configured — smart intake is unavailable. Contact your administrator." instead of silently falling back to pattern-only conversation. The admin response distinguishes `enabled`, `configured`, and `active`, so missing Compass tokens, Qdrant URLs, parser relay configuration, or optional CrewAI Python dependencies are visible rather than hidden.
+Advanced components can be switched on through environment variables or `GET|PATCH /api/admin/features` when the required backing service is configured. Smart chat intake requires `COMPASS_GATEWAY_TOKEN`; when it is absent or the gateway fails, the chat reports that smart intake is unavailable instead of silently pretending a live LLM result exists. The admin response distinguishes `enabled`, `configured`, and `active`, so missing Compass tokens, Qdrant URLs, parser relay configuration, or optional CrewAI Python dependencies are visible.
 
 Full RAG and governed-learning demo setup:
 

@@ -8,7 +8,22 @@ Run the canonical local QA suite from the repository root:
 npm run qa
 ```
 
-This runs syntax checks, static page checks, unit tests, local benchmarks, and CrewAI dry-run validation. The application is a Node/CommonJS Vercel/static app, so there is no React, Vite, FastAPI, Docker, Redis, Postgres, or durable queue setup required for this QA path.
+This runs syntax checks, static page checks, unit tests, local benchmarks, and CrewAI dry-run validation. The product application is a Node/CommonJS Vercel/static app, so there is no React, Vite, Redis, Postgres, or durable queue setup required for this QA path. The separate Agentathon evaluator wrapper is FastAPI/Docker-capable and is validated through the preflight commands below.
+
+## Agentathon Preflight
+
+Run the wrapper submission checks from the repository root:
+
+```bash
+python scripts/agentathon_preflight.py
+python scripts/agentathon_preflight.py --run-api
+python scripts/agentathon_preflight.py --run-api --npm-qa
+python scripts/agentathon_preflight.py --docker
+```
+
+`--run-api` starts `python run.py`, waits for `GET /health`, posts `input_examples/example_1.json` to `/run`, validates structured JSON, and stops the server. `--docker` builds and runs the container only when Docker is installed; if the Docker CLI is missing, it reports `SKIPPED` rather than failing local validation.
+
+CI uses `SAMPLE_MODE=true`, `OPENAI_API_KEY=dummy`, and `OPENAI_BASE_URL=https://compass.core42.ai/v1` so Docker and API shape can be verified without real secrets. Final evaluation should supply a real Compass key through `OPENAI_API_KEY`. Sample mode is fallback/testing only and still executes deterministic logic; it is not a live Compass, Qdrant, CrewAI, or enforced-RBAC claim.
 
 For UI or demo-flow changes, add a human browser check on top of `npm run qa`: verify that the chat is usable, evidence states are visible, the decision room renders a business-first memo, and technical trace details are behind progressive disclosure. The intended validation split is visual, functional, and output quality:
 
@@ -96,5 +111,5 @@ The generated snapshots are written under `evidence/`, including readiness, live
 - Live advisory specialists require `AGENT_RUNTIME=crewai_llm`, `CREWAI_ENABLE_LIVE_LLM=1`, and server-side Compass credentials; final decisions remain deterministic.
 - Local OCR/document parsing is not implemented in this repository.
 - Audit is local append-only hash-chained JSONL, not managed durable storage.
-- Production Redis, Postgres, Docker, FastAPI, durable queues, and OpenClaw are not implemented or claimed.
+- Production Redis, Postgres, durable queues, and OpenClaw are not implemented or claimed; FastAPI and Docker are limited to the Agentathon evaluator wrapper.
 - Human approval remains required; the agent does not auto-approve operational compliance decisions.

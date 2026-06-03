@@ -8,6 +8,7 @@ __pycache__/
 !logs/
 logs/*
 !logs/*.sample.jsonl
+!logs/demo_trace.jsonl
 !logs/README.md
 audits/
 coverage/

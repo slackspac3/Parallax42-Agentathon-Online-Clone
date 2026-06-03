@@ -1,0 +1,45 @@
+{
+  "run_id": "eval-003",
+  "use_case_id": "21",
+  "input": {
+    "query": "Assess cross-border SaaS procurement for a critical finance workflow where subprocessors and retention evidence are missing.",
+    "case": {
+      "case_id": "synthetic-cross-border-saas-003",
+      "requester": "Enterprise Procurement",
+      "business_unit": "Finance Transformation",
+      "geography": "UAE, UK, and Singapore",
+      "supplier_name": "LedgerFlow SaaS",
+      "service_description": "Critical procure-to-pay workflow automation for invoice approvals and supplier records.",
+      "integrations": [
+        "ERP procurement suite",
+        "finance approvals",
+        "SharePoint policy repository"
+      ],
+      "risk_signals": [
+        "cross-border SaaS",
+        "critical finance workflow",
+        "missing subprocessors",
+        "missing retention evidence"
+      ],
+      "cross_border": "Support and hosting may occur across UAE, UK, and Singapore.",
+      "retention": "Retention schedule has not been provided.",
+      "subprocessors": "Subprocessor register has not been provided."
+    },
+    "evidence": [
+      {
+        "id": "SAAS-MSA-01",
+        "title": "Master services agreement excerpt",
+        "text": "MSA defines subscription scope and support SLAs. It references a DPA template, but no signed DPA, subprocessor register, retention schedule, or deletion assistance evidence is attached."
+      },
+      {
+        "id": "SAAS-SEC-01",
+        "title": "Security overview",
+        "text": "Security overview mentions SSO, role-based access, encryption, and audit logs. SOC 2 report is under NDA and was not supplied for this review."
+      }
+    ]
+  },
+  "options": {
+    "sample_mode": false,
+    "max_iterations": 3
+  }
+}

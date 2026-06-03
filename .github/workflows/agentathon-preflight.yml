@@ -1,0 +1,89 @@
+name: Agentathon Preflight
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  agentathon-preflight:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt
+
+      - name: Validate metadata
+        run: python -m json.tool metadata.json
+
+      - name: Run Node QA
+        run: npm run qa
+
+      - name: Run Agentathon API preflight
+        run: python scripts/agentathon_preflight.py --run-api
+        env:
+          SAMPLE_MODE: "true"
+          OPENAI_API_KEY: dummy
+          OPENAI_BASE_URL: https://compass.core42.ai/v1
+
+      - name: Build Docker image
+        run: docker build -t parallax42-agentathon .
+
+      - name: Run Docker container
+        run: |
+          docker run -d --name parallax42-agentathon-ci \
+            -p 8000:8000 \
+            -e SAMPLE_MODE=true \
+            -e OPENAI_API_KEY=dummy \
+            -e OPENAI_BASE_URL=https://compass.core42.ai/v1 \
+            parallax42-agentathon
+
+      - name: Wait for Docker health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://127.0.0.1:8000/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          docker logs parallax42-agentathon-ci
+          exit 1
+
+      - name: Smoke Docker /run
+        run: |
+          curl -fsS -X POST http://127.0.0.1:8000/run \
+            -H "Content-Type: application/json" \
+            -d @input_examples/example_1.json
+
+      - name: Stop Docker container
+        if: always()
+        run: docker rm -f parallax42-agentathon-ci || true
+
+      - name: Upload Agentathon logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agentathon-logs
+          path: logs/
+          if-no-files-found: ignore
