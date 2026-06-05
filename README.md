@@ -62,6 +62,29 @@ The existing product runtime is still the Node/CommonJS app under `server.js`, `
 
 For the consolidated judge-facing architecture, see [`docs/AGENTATHON_SYSTEM_ARCHITECTURE.md`](docs/AGENTATHON_SYSTEM_ARCHITECTURE.md).
 
+### Primary: Online GitHub Review
+
+The intended submission review path is online-first. Reviewers should start with the GitHub repository, hosted cockpit, and GitHub Actions evidence before running anything locally:
+
+| Online item | Link | What to verify |
+| --- | --- | --- |
+| Source repository | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent> | Root `run.py`, `Dockerfile`, `metadata.json`, examples, logs, docs, and workflows are present on `main`. |
+| GitHub Pages cockpit | <https://slackspac3.github.io/Parallax42-Compliance-Intelligence-Agent/> | Static product cockpit loads and uses hosted product routes from `public/config.js`. |
+| Agentathon Preflight workflow | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/agentathon-preflight.yml> | Latest run should show `agentathon-preflight` and `docker-smoke` jobs passing. This is the online proof that Docker builds, the container starts, `GET /health` works, and `POST /run` works in CI sample mode. |
+| CI workflow | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/ci.yml> | Latest run should pass `npm run qa` after Node, Python, and Playwright setup. |
+| Pages deployment workflow | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/pages.yml> | Latest run should deploy the static cockpit to GitHub Pages when `public/` changes. |
+| Architecture doc | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/blob/main/docs/AGENTATHON_SYSTEM_ARCHITECTURE.md> | Evaluator path, product path, Compass boundaries, Qdrant/local fallback, learning memory, optional CrewAI, and safe/unsafe claims are documented together. |
+| Metadata | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/blob/main/metadata.json> | Use Case 21 metadata, agents, tools, and endpoint declarations are visible. |
+| Input examples | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/tree/main/input_examples> | At least three valid synthetic JSON inputs are committed. |
+| Output examples | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/tree/main/output_examples> | Runtime-generated outputs differ by case and include trace/log references. |
+| Trace logs | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/tree/main/logs> | JSONL traces show delegation, retry/fallback, critique, validation, escalation, shared context, and final synthesis. |
+
+Important boundary: GitHub Pages is static, so it does not run the root FastAPI `run.py` server or expose `POST /run` from the Pages URL. The online `/run` verification happens in the Agentathon Preflight GitHub Actions workflow, where CI builds the Docker image, starts the container on port `8000`, calls `GET /health`, and posts `input_examples/example_1.json` to `/run`.
+
+### Secondary: Local Run
+
+Use local commands only after the online repository, workflows, and hosted cockpit have been reviewed, or when reproducing a CI result on a development machine.
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
@@ -103,24 +126,7 @@ gh run list --workflow agentathon-preflight.yml --limit 5
 gh run view <run-id> --log-failed
 ```
 
-## Run And Test From Online GitHub
-
-Use these links when reviewing the submitted repository without a local checkout:
-
-| Online item | Link | What to verify |
-| --- | --- | --- |
-| Source repository | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent> | Root `run.py`, `Dockerfile`, `metadata.json`, examples, logs, docs, and workflows are present on `main`. |
-| GitHub Pages cockpit | <https://slackspac3.github.io/Parallax42-Compliance-Intelligence-Agent/> | Static product cockpit loads from `public/` and uses the configured hosted product routes in `public/config.js`. |
-| Agentathon Preflight workflow | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/agentathon-preflight.yml> | Latest run should show `agentathon-preflight` and `docker-smoke` jobs passing. This is the online proof that Docker builds, the container starts, `GET /health` works, and `POST /run` works in CI sample mode. |
-| CI workflow | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/ci.yml> | Latest run should pass `npm run qa` after Node, Python, and Playwright setup. |
-| Pages deployment workflow | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/pages.yml> | Latest run should deploy the static cockpit to GitHub Pages when `public/` changes. |
-| Architecture doc | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/blob/main/docs/AGENTATHON_SYSTEM_ARCHITECTURE.md> | Evaluator path, product path, Compass boundaries, Qdrant/local fallback, learning memory, optional CrewAI, and safe/unsafe claims are documented together. |
-| Metadata | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/blob/main/metadata.json> | Use Case 21 metadata, agents, tools, and endpoint declarations are visible. |
-| Input examples | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/tree/main/input_examples> | At least three valid synthetic JSON inputs are committed. |
-| Output examples | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/tree/main/output_examples> | Runtime-generated outputs differ by case and include trace/log references. |
-| Trace logs | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/tree/main/logs> | JSONL traces show delegation, retry/fallback, critique, validation, escalation, shared context, and final synthesis. |
-
-Important boundary: GitHub Pages is static, so it does not run the root FastAPI `run.py` server or expose `POST /run` from the Pages URL. The online `/run` verification happens in the Agentathon Preflight GitHub Actions workflow, where CI builds the Docker image, starts the container on port `8000`, calls `GET /health`, and posts `input_examples/example_1.json` to `/run`.
+## Online Product And Submission Tests
 
 To test the online product cockpit:
 
@@ -196,6 +202,67 @@ curl http://localhost:8000/compass/probe
 ```
 
 `OPENAI_BASE_URL` is normalized for the official direct Agentathon Compass path. `https://compass.core42.ai` is corrected to `https://compass.core42.ai/v1`; duplicate `/v1/v1` and known frontend URLs are rejected. If `OPENAI_BASE_URL` is not exported, `compass_doctor.py` reports that the default is used only for normalization and is not live proof. The optional Parallax42 Vercel gateway uses `COMPASS_GATEWAY_BASE_URL` and `COMPASS_GATEWAY_TOKEN` in the existing Node product runtime. It is not the official Agentathon Compass direct path unless explicitly configured as an OpenAI-compatible `/v1` endpoint.
+
+## Azure Migration Path
+
+The current submitted version is GitHub/Vercel/Docker-oriented. It can be migrated to Azure without changing the core product architecture by moving each runtime boundary to the closest Azure service and keeping the same environment contracts.
+
+Recommended Azure target:
+
+| Current component | Azure target | Notes |
+| --- | --- | --- |
+| GitHub Pages static cockpit in `public/` | Azure Static Web Apps or Azure Storage static website + Azure Front Door | Hosts the same browser cockpit. The browser still receives no Compass, Qdrant, or backend secrets. |
+| Node/Vercel APIs in `api/` and local `server.js` mirror | Azure App Service for Node.js, Azure Functions, or Azure Container Apps | Keeps the product API, conversation endpoint, evidence endpoints, review-pack endpoint, and backend relay server-side. |
+| FastAPI Agentathon wrapper in `run.py` / `app/` | Azure Container Apps or Azure App Service for Containers | Uses the existing `Dockerfile`; exposes port `8000`; keeps `/health`, `/metadata`, `/logs`, `/compass/probe`, and `/run`. |
+| Docker image | Azure Container Registry | Build from GitHub Actions or Azure DevOps, then deploy to Container Apps/App Service. |
+| Compass and gateway secrets | Azure Key Vault + managed identity or App Service/Container App secrets | Store `OPENAI_API_KEY`, `COMPASS_GATEWAY_TOKEN`, `QDRANT_API_KEY`, and auth secrets outside code. |
+| Product Compass gateway | Azure Container Apps, Azure Functions, or API Management-backed service | Preserve the server-side gateway role. Do not expose model keys to the browser. |
+| Qdrant vector memory | Managed Qdrant, Qdrant on AKS/Container Apps, or Azure AI Search vector index | Qdrant remains optional unless `P42_VECTOR_STORE_PROVIDER=qdrant` and smoke tests pass. Azure AI Search would require an adapter before claiming parity. |
+| Local JSONL audit and logs | Azure Blob Storage, Azure Files, or Log Analytics | Local logs are sufficient for Agentathon; production audit should use durable managed storage. |
+| Parser/OCR backend or droplet | Azure Container Apps/App Service plus Azure Document Intelligence if adopted | Current repo does not claim production OCR. Add this only as a server-side boundary. |
+| Auth/RBAC audit mode | Microsoft Entra ID, JWKS validation, App Service Authentication, and route policy enforcement | The repo has audit-mode/auth scaffolding; enforced RBAC should only be claimed after Entra/JWKS validation is configured and tested. |
+| Observability | Application Insights + Log Analytics | Track `/run`, `/api/conversation`, gateway calls, retrieval, and audit-pack generation without logging secrets or raw embeddings. |
+
+Minimal Azure deployment sequence:
+
+1. Build the existing Docker image and push it to Azure Container Registry.
+2. Deploy the FastAPI Agentathon wrapper to Azure Container Apps or App Service for Containers with `PORT=8000`.
+3. Configure server-side secrets through Key Vault or Container App/App Service secret settings:
+
+```text
+OPENAI_API_KEY=<Compass key>
+OPENAI_BASE_URL=https://compass.core42.ai/v1
+MODEL_FAST=gpt-4.1
+MODEL_REASONING=gpt-5.1
+EMBEDDING_MODEL=text-embedding-3-large
+SAMPLE_MODE=false
+REQUIRE_COMPASS=true
+LOG_DIR=/logs
+```
+
+4. Deploy the product Node API separately to App Service/Functions/Container Apps, or keep Vercel during transition.
+5. Deploy the static cockpit to Azure Static Web Apps and set its runtime config to the Azure-hosted API/gateway URLs.
+6. If durable RAG is required, configure Qdrant or build an Azure AI Search adapter, then run the smoke test before claiming active vector memory.
+7. Wire Entra ID/JWKS auth and route policies before claiming enforced RBAC.
+8. Validate with the same online-first checks: `/health`, `/metadata`, `/compass/probe`, `/run`, Docker/container logs, no-secret scan, and generated trace logs.
+
+Azure verification commands after deployment should mirror the existing checks:
+
+```bash
+curl https://<agentathon-api-host>/health
+curl https://<agentathon-api-host>/metadata
+curl https://<agentathon-api-host>/compass/probe
+curl -X POST https://<agentathon-api-host>/run \
+  -H "Content-Type: application/json" \
+  -d @input_examples/example_1.json
+```
+
+Safe Azure claims after this migration:
+
+- The same Agentathon FastAPI wrapper can run as an Azure containerized API.
+- The same product cockpit can be hosted as an Azure static app.
+- Secrets can move from Vercel/GitHub runtime settings into Azure Key Vault or Azure app secrets.
+- Qdrant, Entra RBAC, production OCR, and durable audit should remain separate claims until configured and smoke-tested in Azure.
 
 ## Agentathon Preflight
 

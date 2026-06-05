@@ -1,8 +1,22 @@
 # Evaluation
 
-## How To Run QA
+## Primary Online Evaluation
 
-Run the canonical local QA suite from the repository root:
+Start with the online GitHub evidence rather than a local checkout:
+
+| Online item | Link | What to verify |
+| --- | --- | --- |
+| Repository | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent> | Root `run.py`, `Dockerfile`, `metadata.json`, examples, logs, and docs are present on `main`. |
+| GitHub Pages cockpit | <https://slackspac3.github.io/Parallax42-Compliance-Intelligence-Agent/> | Static product cockpit loads and uses hosted product routes from `public/config.js`. |
+| Agentathon Preflight | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/agentathon-preflight.yml> | Latest `main` run passes both `agentathon-preflight` and `docker-smoke`. This is the online Docker plus `/health` and `/run` proof. |
+| CI | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/ci.yml> | Latest `main` run passes `npm run qa`. |
+| Architecture | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/blob/main/docs/AGENTATHON_SYSTEM_ARCHITECTURE.md> | Online-first evaluator path, product path, and runtime boundaries are documented. |
+
+GitHub Pages is a static cockpit and does not host the FastAPI evaluator API. The online `/run` test is the `docker-smoke` job in the Agentathon Preflight workflow: it builds the Docker image, starts the container on port `8000`, calls `GET /health`, and posts `input_examples/example_1.json` to `/run`.
+
+## Secondary Local QA
+
+Run the canonical local QA suite from the repository root only when reproducing or extending the online checks:
 
 ```bash
 npm run qa
@@ -12,9 +26,9 @@ This runs syntax checks, static page checks, unit tests, local benchmarks, and C
 
 The consolidated evaluator and product architecture is documented in [`docs/AGENTATHON_SYSTEM_ARCHITECTURE.md`](docs/AGENTATHON_SYSTEM_ARCHITECTURE.md).
 
-## Agentathon Preflight
+## Secondary Local Agentathon Preflight
 
-Run the wrapper submission checks from the repository root:
+Run the wrapper submission checks from the repository root when reproducing CI locally:
 
 ```bash
 python scripts/agentathon_preflight.py

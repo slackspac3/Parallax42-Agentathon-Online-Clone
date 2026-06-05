@@ -250,9 +250,22 @@ Default Docker/CI does not require CrewAI. If live CrewAI is enabled and fails, 
 | Examples and traces | `input_examples/`, `output_examples/`, `logs/` |
 | Submission checks | `scripts/agentathon_preflight.py`, `.github/workflows/agentathon-preflight.yml`, `Dockerfile` |
 
-## 13. Verification Commands
+## 13. Verification Flow
 
-Core local checks:
+The submission is reviewed online first. Local commands are secondary reproduction tools.
+
+Primary online checks:
+
+| Online check | Link | Expected result |
+| --- | --- | --- |
+| Repository contents | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent> | Root evaluator files, examples, logs, docs, Dockerfile, and workflows are visible on `main`. |
+| Product cockpit | <https://slackspac3.github.io/Parallax42-Compliance-Intelligence-Agent/> | Static cockpit loads and reaches the configured hosted product routes. |
+| Agentathon Preflight | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/agentathon-preflight.yml> | `agentathon-preflight` and `docker-smoke` jobs pass. |
+| CI | <https://github.com/slackspac3/Parallax42-Compliance-Intelligence-Agent/actions/workflows/ci.yml> | `npm run qa` passes online. |
+
+The online `docker-smoke` job is the primary evaluator API proof. It builds the image, runs `python run.py` inside the container, calls `GET /health`, and posts `input_examples/example_1.json` to `POST /run`.
+
+Secondary local checks:
 
 ```bash
 npm run qa
