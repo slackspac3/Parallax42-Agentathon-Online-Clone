@@ -14,6 +14,16 @@
 
 ## Work Plan
 
+### Final Submission Status
+
+- Online judge demo is primary: GitHub Pages cockpit -> Vercel product APIs -> server-side Compass gateway/API boundary -> Ocean/DigitalOcean backend services -> Qdrant evidence memory.
+- Evaluator reproduction path is present: root `run.py`, Dockerfile, FastAPI `/run` on port `8000`, metadata, examples, output examples, and logs.
+- Multi-agent collaboration is visible in JSONL traces and the architecture docs.
+- Compass is used server-side; browser clients do not receive Compass keys. Direct `OPENAI_API_KEY` / `OPENAI_BASE_URL` diagnostics remain available for evaluator-style runs.
+- Qdrant is verified active in the deployed product evidence API; local/FastAPI Qdrant remains env-dependent.
+- CrewAI is optional/advisory and not the default runtime.
+- RBAC is audit-mode unless enforced identity env vars are configured and verified.
+
 ### Phase 1: Clean Repo And Runnable Agent
 
 - Create repo.
@@ -49,6 +59,8 @@
 
 ## Current Open Risks
 
-- Vercel API project is live and linked to the GitHub Pages cockpit default relay URL.
-- Security story now has RBAC/audit implementation, but still needs live Entra env configuration and durable audit retention before enterprise-grade claims.
-- Benchmark story needs broader live, adversarial, upload/OCR, and latency tests.
+- Demo video still needs to be recorded and linked before final submission.
+- Direct Compass strict proof requires valid Compass credentials and should be tested with `python scripts/compass_doctor.py --strict` when available.
+- Enforced RBAC and enterprise-durable audit remain hardening items, not submitted claims.
+- Arbitrary scanned-PDF OCR is not claimed; fixture PDFs and backend/parser relay paths are the safe demo scope.
+- Broader live/adversarial/latency benchmarks remain score lifts rather than final-day feature work.

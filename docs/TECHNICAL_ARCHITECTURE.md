@@ -5,32 +5,36 @@
 ```text
 Browser cockpit
   -> NLP conversation case builder
-  -> local Node API or Vercel API
-  -> CrewAI Flow runtime router
+  -> Vercel product API, or local Node API for reproduction
+  -> server-side Compass gateway/API boundary
+  -> optional CrewAI/runtime router
   -> compliance agent loop
-  -> evidence/domain library
+  -> Qdrant-backed evidence memory in deployed product, local fallback when unconfigured
+  -> evidence/domain library and governed learning memory
   -> decision + control plan + trace
 ```
 
-Linked production evidence:
-
-```text
-Parallax42 GitHub Pages UI
-  -> external Parallax42 backend
-  -> SupplierRiskFlow
-  -> Compass gateway
-  -> Core42 Compass GPT-5.1
-```
-
-Submission deployment:
+Linked online product evidence:
 
 ```text
 GitHub Pages cockpit
-  -> Vercel /api/health, /api/readiness, /api/benchmarks, /api/conversation, /api/agent/run
-  -> Vercel /api/evidence/index and /api/evidence/search
-  -> Server-side vector store boundary
-  -> Vercel /api/backend allowlisted relay
-  -> Parallax42 backend health/demo endpoints
+  -> Vercel product APIs
+  -> server-side Compass gateway/API boundary
+  -> Ocean/DigitalOcean backend services
+  -> droplet-hosted Qdrant collection p42_compliance_evidence
+```
+
+Agentathon evaluator reproduction:
+
+```text
+GitHub Actions / Docker
+  -> python run.py
+  -> FastAPI 0.0.0.0:8000
+  -> POST /run
+  -> Python multi-agent council
+  -> Node bridge scripts/agentathon_run.js
+  -> deterministic rules engine
+  -> JSON response + logs/*.jsonl
 ```
 
 Evidence ingestion and retrieval:
@@ -42,7 +46,7 @@ Browser
   -> parsed document evidence IDs and summaries
   -> Vercel /api/evidence/index
   -> Parallax42 Compass embeddings gateway
-  -> server-side vector store (Qdrant in production, local file fallback for demo/dev)
+  -> server-side vector store (Qdrant in deployed product, local file fallback for unconfigured local/dev)
   -> Vercel /api/evidence/search retrieves by caseId
   -> council receives citation-ready matches
   -> Vercel /api/export/review-pack packages decision, citations, evidence quality, and retrieval audit
@@ -73,6 +77,7 @@ CourtListener / CUAD-compatible / NIST / legacy CAP local imports
 | Runtime router | `lib/agentRuntime.js` | Selects CrewAI Flow, deterministic fallback, and runtime metadata. |
 | Agent runtime | `lib/complianceAgent.js` | Intake normalization, domain scan, gaps, decision, controls, trace. |
 | Advisory council | `lib/advisoryCouncil.js` | Optional GPT-5.1 Privacy, Security, Responsible AI, and Learning/Precedent specialists through the Compass gateway; advisory only and unable to mutate final decisions. |
+| Agentathon evaluator wrapper | `run.py`, `app/`, `scripts/agentathon_run.js` | Standardized FastAPI `/run` path for technical screening, Docker smoke, and JSONL trace generation. |
 | RBAC policy | `lib/rbac.js` | Route policy, role normalization, bearer JWT validation, and Entra-compatible RS256/JWKS support. |
 | CrewAI Flow adapter | `crewai_adapter/compliance_flow.py` | Flow state/stage mapping and optional live Flow validation. |
 | Evidence layer | `lib/evidenceLibrary.js` | Initial compliance domain library and evidence IDs. |
@@ -106,6 +111,7 @@ The production target should be extracted from Parallax42 rather than rewritten:
 - Embedding calls are token-protected server-to-server calls; the browser never receives Compass, Vercel AI Gateway, or embedding provider credentials.
 - Chunk embeddings are stored behind `/api/evidence/index` and retrieved behind `/api/evidence/search`; browser responses strip vectors and raw chunk payloads.
 - Qdrant is the full RAG/learning demo provider when `P42_VECTOR_STORE_PROVIDER=qdrant`, `QDRANT_URL`, and the Compass embedding gateway are configured; local-file storage is a demo fallback only.
+- In the current deployed product path, Qdrant is configured server-side through Vercel and the Ocean/DigitalOcean droplet. In local/FastAPI reproduction, Qdrant remains env-dependent and falls back when Qdrant or embeddings are missing.
 - Governed learning memory returns similar cases and control suggestions as advisory reviewer context only. It never rewrites the deterministic run output.
 - Output is never automatic approval; it is a human-review decision brief.
 - Live LLM specialist output is advisory only; deterministic guardrails own decision status, approval eligibility, and blocker naming.

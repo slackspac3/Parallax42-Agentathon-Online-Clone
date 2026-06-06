@@ -437,7 +437,7 @@ Troubleshooting Compass:
 - This repository does not include Redis, Postgres, Celery, or durable queues.
 - Without the optional remote Python CrewAI service, the product runtime degrades to deterministic decisioning plus CrewAI-shaped dry run.
 - Live Compass advisory output is optional outside final evaluation credentials and remains advisory only.
-- Qdrant support exists only when configured; local-file vector storage is the demo default.
+- Qdrant is active in the deployed Vercel product evidence API; local/FastAPI runtimes require Qdrant and embedding env vars or they fall back to local-file storage.
 - Governed learning memory is advisory reviewer memory only; it is not model training, autonomous approval, or policy mutation.
 - OCR/parser capability is integrated through external relay paths rather than implemented as a local parser service in this repo.
 - OpenClaw is not implemented and should not be claimed.

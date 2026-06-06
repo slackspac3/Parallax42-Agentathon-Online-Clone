@@ -10,14 +10,16 @@ Strengthen compliance visibility across enterprise workflows by turning intake, 
 
 ## Current Core Capabilities
 
+- Online-first judge demo through GitHub Pages, Vercel product APIs, server-side Compass gateway/API boundary, and Ocean/DigitalOcean backend services.
+- Root Agentathon evaluator wrapper: `run.py` exposes `POST /run`, `GET /health`, `GET /metadata`, `GET /logs`, and `GET /compass/probe` on port `8000`.
 - Compliance-domain triage across third-party, privacy, AI/model governance, continuity, finance/project compliance, Microsoft licensing, ESG/HSE/BCM, physical security, technical risk, and regulatory reporting.
 - Evidence-backed obligation mapping with named evidence IDs rather than unsupported free-form advice.
 - Blocking-gap identification with action owners expressed as concrete controls.
 - Human-review decision posture: ready, conditionally ready, or not ready.
-- Trace event output for intake, domain scan, evidence mapping, control recommendation, and output review.
+- Multi-agent trace event output for intake, delegation, evidence retrieval, retry/fallback, specialist critique, validation, learning/precedent, deterministic decisioning, and audit packaging.
 - Hash-chained audit records with integrity verification for run history and reviewer traceability.
-- Route-level RBAC policy with Entra-compatible JWT validation available in enforced mode.
-- Live Parallax42 deployment evidence for multi-agent supplier risk, OCR document parsing, Compass gateway boundary, admin health, and golden evals.
+- Route-level RBAC policy and Entra-compatible JWT validation code exist, but submitted/demo mode is audit-mode unless enterprise identity env vars are configured and verified.
+- Deployed product evidence for smart intake, document/fixture analysis, Compass gateway boundary, Qdrant-backed evidence memory, admin health, and golden evals.
 
 ## Differentiators
 
@@ -26,11 +28,15 @@ Strengthen compliance visibility across enterprise workflows by turning intake, 
 - Treats deterministic fallback as a degraded mode rather than pretending fallback is live AI.
 - Uses output review and blind-spot challenge concepts before presenting a decision to humans.
 - Explicitly names missing evidence and escalation needs instead of forcing false precision.
+- Separates hosted product AI from evaluator reproduction: the browser demo uses Vercel server-side Compass routes, while the FastAPI wrapper preserves the direct `OPENAI_API_KEY` / `OPENAI_BASE_URL` contract for `/run` diagnostics.
+- Keeps deterministic policy as final authority; Compass, Qdrant retrieval, governed learning memory, and optional CrewAI remain advisory inputs.
 
 ## Current Limitations
 
-- This packaging repo is early; it contains the clean submission surface and deterministic agent loop.
-- Entra ID/RBAC code is implemented, but production tenant, issuer, audience, and JWKS configuration still need to be set in the live environment.
+- The judge-facing product demo is online-first; local setup is a reproduction path and not the primary demo surface.
+- Direct Compass strict verification depends on a valid Compass key and the documented `OPENAI_BASE_URL=https://api.core42.ai/v1`; the product demo uses a separate server-side gateway boundary.
+- Enforced RBAC is not claimed unless production tenant, issuer, audience, and JWKS configuration are set and tested.
 - Audit records are hash chained locally; production retention should use durable mounted storage or a managed database.
-- Benchmark evidence exists in Parallax42 but must be expanded into latency, reliability, and Responsible AI reports.
+- The deployed product path uses Qdrant-backed evidence memory; local/FastAPI Qdrant remains environment-dependent and falls back when Qdrant or embeddings are absent.
+- Fixture PDF support is for generated text-based demo PDFs only, not arbitrary scanned-PDF OCR.
 - Demo video is not recorded yet.

@@ -2,6 +2,8 @@
 
 The golden demo is the canonical path for the G42 submission. It is intentionally high-risk enough to prove the agent can say no, name gaps, require evidence, and preserve human approval.
 
+The judge-facing walkthrough is online-first: GitHub Pages cockpit -> Vercel product APIs -> server-side Compass gateway/API boundary -> Ocean/DigitalOcean backend services -> Qdrant evidence memory. The root FastAPI/Docker path remains the evaluator reproduction surface for `run.py` and `POST /run`.
+
 ## Replay Endpoint
 
 ```text
@@ -73,7 +75,9 @@ The agent must:
 - The agent ties decisions to evidence and named gaps.
 - The agent can be evaluated repeatedly.
 - The same path can power the video, benchmark, evidence pack, and regression suite.
+- Compass, Qdrant retrieval, governed learning memory, and optional CrewAI stay advisory; deterministic policy owns the final decision.
+- The browser does not receive Compass keys, Qdrant keys, service tokens, or raw embeddings.
 
 ## Next Upgrade
 
-The next implementation should make this same golden workflow executable through CrewAI Flow while preserving the same API response contract.
+The next implementation should increase measured live-eval coverage without changing the final authority boundary. Live CrewAI may be enabled only when dependencies, Compass credentials, and eval gates are configured; it remains advisory and must preserve the same API response contract.

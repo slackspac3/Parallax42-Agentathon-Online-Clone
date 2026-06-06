@@ -24,17 +24,23 @@ Covered case themes include:
 
 ## This Repo Baseline
 
-Initial local tests cover:
+Current checks cover:
 
 - empty-case blocking
 - AI/privacy/continuity/third-party detection
 - ready or conditionally ready decision behavior
+- online product health/Qdrant proof through Vercel product APIs
+- Agentathon wrapper shape through `scripts/agentathon_preflight.py`
+- Docker `/health` and `/run` smoke through GitHub Actions
+- multi-agent traces with delegation, retry/fallback, critique, validation, escalation, and deterministic final ownership
 
 Run:
 
 ```bash
 npm run qa
 npm run capture:evidence
+python scripts/agentathon_preflight.py
+python scripts/agentathon_preflight.py --run-api
 ```
 
 Generated benchmark output is written to `evidence/benchmark-report.json`.
@@ -46,6 +52,8 @@ Generated benchmark output is written to `evidence/benchmark-report.json`.
 - Upload/OCR throughput report.
 - Responsible AI test suite against prompt injection, unsupported approval language, bias-sensitive assumptions, and data minimization.
 - Reliability run showing repeated executions with trace and decision consistency.
+- Demo video still needs to be recorded and linked.
+- Direct Compass strict verification requires valid Compass credentials; product Compass usage remains server-side through the hosted gateway/API boundary.
 
 ## Target Acceptance Threshold
 
@@ -56,3 +64,4 @@ Before submitting, the package should show:
 - p95 local deterministic run latency under 500 ms
 - p95 live backend no-upload run latency under an agreed operational threshold
 - clear fallback labeling whenever live AI is unavailable
+- no claim of enforced RBAC, enterprise-durable audit, arbitrary scanned-PDF OCR, or live CrewAI unless separate checks pass

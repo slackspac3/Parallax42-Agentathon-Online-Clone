@@ -7,7 +7,7 @@ This roadmap starts from the submission end state and works backward into implem
 By submission time, the repo should support this story:
 
 ```text
-A reviewer opens the live cockpit, runs the golden AI SaaS compliance case, sees evidence-backed gaps, inspects the agent trace, confirms human approval controls, exports the audit pack, and sees benchmark/RAI/security evidence tied to a deployed API.
+A reviewer opens the online GitHub Pages cockpit, uses Vercel product APIs backed by server-side Compass and droplet-hosted Qdrant, runs a high-risk compliance case or fixture PDF, sees evidence-backed gaps, inspects the agent trace, confirms human approval controls, exports the audit pack, and sees Agentathon Docker /run proof in GitHub Actions.
 ```
 
 ## Milestone 0: Golden Demo Spine
@@ -32,11 +32,11 @@ Acceptance:
 - automatic approval prevention check passes
 - trace includes intake, domain scan, evidence mapping, control recommendation, and output review
 
-## Milestone 1: CrewAI Flow Runtime
+## Milestone 1: Optional CrewAI Flow Runtime
 
 Status: implemented.
 
-Goal: make CrewAI the primary orchestration path while keeping deterministic fallback for demos and CI.
+Goal: keep the stable custom/deterministic orchestrator as the default while providing an optional CrewAI advisory path for future/live validation.
 
 Build:
 
@@ -44,7 +44,7 @@ Build:
 - typed state model for case, evidence, domains, gaps, controls, decision, trace. `Implemented as Flow state schema manifest`
 - crew handoff from orchestrator to specialist agents. `Implemented through Flow stages mapped to YAML agents/tasks`
 - memory scope for reusable policy/control facts. `Deferred to evidence/retrieval milestone`
-- API mode switch: deterministic, CrewAI dry-run, CrewAI live. `Implemented via AGENT_RUNTIME and X-Agent-Runtime/body runtime`
+- API mode switch: custom/deterministic, CrewAI dry-run, CrewAI live. `Implemented via AGENT_RUNTIME and X-Agent-Runtime/body runtime`
 - trace normalization so CrewAI and deterministic runs emit the same UI contract. `Implemented via runtime_router trace event`
 
 Acceptance:
@@ -54,6 +54,7 @@ Acceptance:
 - optional live LLM specialist output is wired and guarded. `Available via AGENT_RUNTIME=crewai_llm and CREWAI_ENABLE_LIVE_LLM=1`
 - golden case produces the same acceptance status as deterministic replay. `Passed`
 - missing secrets/dependencies degrade to deterministic decision fallback with explicit mode label. `Passed`
+- do not claim live CrewAI unless the optional runtime actually executes with configured credentials. `Submission boundary`
 
 ## Milestone 2: Evidence Intake And Citation Discipline
 
@@ -153,6 +154,8 @@ Acceptance:
 
 - live cockpit works
 - Vercel API works
+- Agentathon Preflight workflow verifies Docker plus `/health` and `/run`
+- online product evidence API shows Qdrant provider without exposing keys
 - evidence artifacts are current
 - CI and Pages workflows are green
 - submission packet has no unsupported production claims

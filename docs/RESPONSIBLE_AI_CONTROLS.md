@@ -7,7 +7,10 @@
 - Evidence IDs are attached to recommendations.
 - Missing evidence becomes a named gap rather than invented certainty.
 - AI/model governance is a first-class domain, including model-training data-use checks.
-- Live Compass access is routed through a gateway boundary in the linked Parallax42 deployment.
+- Compass access is routed server-side through the product gateway/API boundary; the browser receives no Compass keys.
+- The Agentathon FastAPI wrapper preserves direct `OPENAI_API_KEY` / `OPENAI_BASE_URL` diagnostics for evaluator-style runs.
+- Qdrant retrieval and governed learning memory are advisory context only; they do not override deterministic policy.
+- Optional CrewAI output is advisory and not active by default.
 
 ## Controls To Implement Next
 
@@ -24,4 +27,6 @@
 - The agent must not approve a compliance case automatically.
 - The agent must not infer sensitive facts without evidence.
 - The agent must not expose secrets, raw private documents, or gateway tokens.
+- The agent must not expose Qdrant keys or raw embedding vectors.
 - The agent must mark degraded or deterministic fallback mode clearly.
+- The agent must keep deterministic policy and human review as the final decision boundary.

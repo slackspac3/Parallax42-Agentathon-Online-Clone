@@ -2,6 +2,16 @@
 
 The target is not a compliance chatbot. The target is an enterprise-grade compliance intelligence worker that can be evaluated, operated, audited, and safely constrained in production.
 
+## Current Submission Boundary
+
+The final Agentathon submission is an online-first product demo plus a reproducible evaluator wrapper:
+
+- Online product demo: GitHub Pages cockpit -> Vercel product APIs -> server-side Compass gateway/API boundary -> Ocean/DigitalOcean backend services -> droplet-hosted Qdrant evidence memory.
+- Evaluator reproduction: root `run.py` / FastAPI / Docker / `POST /run` on port `8000`.
+- Compass is used server-side. Browser clients never receive Compass keys, Qdrant keys, service tokens, or raw embeddings.
+- Deterministic policy remains final authority; Compass, Qdrant retrieval, governed learning memory, and optional CrewAI are advisory.
+- Enforced RBAC, enterprise-durable audit, arbitrary scanned-PDF OCR, and live CrewAI are not claimed unless separately configured and verified.
+
 ## North Star
 
 Parallax42 Compliance Intelligence Agent should become a reviewer-facing agentic control plane for compliance decisions across supplier risk, AI governance, privacy, finance/project controls, Microsoft governance, regulatory compliance, ESG/HSE/BCM, and technical risk.
@@ -26,7 +36,8 @@ The agent should exceed the G42 submission ask by showing:
 GitHub Pages Cockpit
   -> Vercel Compliance API
       -> deterministic fallback agent
-      -> CrewAI Flow orchestration
+      -> optional CrewAI Flow orchestration
+      -> server-side Compass gateway/API boundary
       -> optional OpenAI Responses / Agents SDK adapter
       -> evidence store and retrieval layer
       -> policy/control library
@@ -36,6 +47,7 @@ GitHub Pages Cockpit
           -> Parallax42 FastAPI backend
           -> Compass gateway
           -> document/OCR pipeline
+          -> Qdrant vector memory
 ```
 
 ## Agent Runtime
@@ -44,8 +56,8 @@ The target runtime is a layered agent stack:
 
 | Layer | End-State Choice | Why |
 | --- | --- | --- |
-| Workflow spine | CrewAI Flow | Implemented as the current default runtime shape. CrewAI recommends a Flow-first mindset for production AI applications, and Flows provide state, event structure, and multi-step control. |
-| Specialist collaboration | CrewAI Crews | Maps cleanly to orchestrator, obligation mapper, evidence examiner, risk/control analyst, RAI reviewer, and audit packager. |
+| Workflow spine | Custom deterministic orchestrator now; optional CrewAI Flow target | The submission default stays stable and deterministic. CrewAI remains an optional advisory path until dependency, credential, and eval gates are verified. |
+| Specialist collaboration | Custom council now; optional CrewAI Crews target | The current trace already shows role-specific agents. CrewAI maps cleanly to orchestrator, obligation mapper, evidence examiner, risk/control analyst, RAI reviewer, and audit packager when enabled. |
 | Model/tool execution | Responses API or sovereign Compass-compatible adapter | OpenAI's current tools model supports function calling, file search, remote MCP, web search, shell/computer-use patterns, and tool choice control. |
 | Structured output | JSON Schema / Pydantic / Zod contracts | Structured Outputs are preferred over JSON mode where possible because schema adherence is enforceable. |
 | Guardrails | Input, output, and tool guardrails | Tool guardrails matter because agent-level guardrails do not cover every specialist/tool boundary in delegated workflows. |
@@ -100,7 +112,7 @@ The submission should include:
 | Gap | Why It Matters |
 | --- | --- |
 | Live LLM-backed CrewAI specialist output is opt-in and advisory. | The wiring exists, but provider credentials, eval gates, and approval policy must be enabled before live output can influence decisions. |
-| Evidence upload streams to the backend parser/OCR boundary, calls the shared embedding/index gateway, and stores chunk vectors behind the API. | Production should use a durable managed vector store such as Qdrant or Azure AI Search instead of the local demo provider. |
+| Evidence upload streams to the backend parser/OCR boundary, calls the shared embedding/index gateway, and stores chunk vectors behind the API. | The deployed product path uses Qdrant; local/FastAPI reproduction still falls back unless Qdrant and embedding env vars are exported. |
 | Audit is hash-chained locally but Vercel uses ephemeral `/tmp` unless durable storage is configured. | Enterprise review needs retained records across deployments and function instances. |
 | RBAC middleware and JWT validation are implemented, but live Entra config is not set. | Secure authentication must be enabled in the target enterprise environment. |
 | Evals are local and deterministic only. | World-class agent delivery requires regression, adversarial, and trace-level evals. |

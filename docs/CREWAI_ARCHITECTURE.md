@@ -4,6 +4,8 @@
 
 CrewAI gives the submission a recognizable multi-agent orchestration layer for role-specific compliance work while the deterministic Node control engine keeps the demo fast and dependency-light.
 
+Final submission boundary: CrewAI is optional and advisory. The default judge-facing product demo and Agentathon `/run` path do not require live CrewAI. Do not claim live CrewAI unless `AGENT_RUNTIME=crewai_live` / `CREWAI_ENABLE_LIVE_LLM=1` or the Vercel remote CrewAI service path has actually executed successfully.
+
 The adapter now follows the current CrewAI Flow-first production pattern:
 
 - `Flow` state machine as the primary runtime shape
@@ -12,6 +14,7 @@ The adapter now follows the current CrewAI Flow-first production pattern:
 - deterministic fallback for CI, demos, and missing optional dependencies
 - normalized trace output so CrewAI and deterministic paths share the same API contract
 - opt-in live LLM calls for specialist analysis, gated by `CREWAI_ENABLE_LIVE_LLM=1`
+- deterministic final ownership remains outside CrewAI
 
 Official CrewAI documentation referenced:
 
@@ -62,3 +65,4 @@ Official CrewAI documentation referenced:
 - The deterministic decision engine remains the baseline for CI and local reproducibility.
 - Runtime metadata is included in API output and audit payloads.
 - Live LLM specialist output is advisory until eval gates are added; it cannot approve a case by itself.
+- Compass, Qdrant retrieval, and learning memory can provide context to CrewAI, but deterministic policy remains the final decision owner.
