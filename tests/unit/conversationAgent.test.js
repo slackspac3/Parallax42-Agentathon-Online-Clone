@@ -1426,6 +1426,89 @@ test('conversation maps focus on all the areas to active review focus question',
   assert.ok(!result.questions.some((question) => /should the review focus|focus primarily|all of these areas/i.test(question)));
 });
 
+test('conversation maps review focus from full assistant prose when active question metadata is stale', () => {
+  const assistantText = [
+    'Got it, Compliance is the accountable owner for this SOW.',
+    '',
+    'Next best review question Within this Cloud AI Model Services SOW, do you want the review to focus primarily on data handling and retention, responsible AI and model governance, security and monitoring, or should I treat all of these areas as equally in-scope?',
+    '',
+    'Why it matters: This keeps the decision memo clear about what is known, what is assumed, and what a human reviewer must confirm.'
+  ].join('\n');
+  const staleQuestion = 'Who is the accountable business unit or workflow owner?';
+  const result = processConversation({
+    message: 'Focus on all the areas',
+    eventType: 'user_answer',
+    activeQuestion: staleQuestion,
+    history: [
+      { role: 'assistant', text: assistantText },
+      { role: 'user', text: 'Focus on all the areas', answeringQuestion: staleQuestion }
+    ],
+    caseDraft: {
+      supplierName: 'Aster Cognitive Cloud',
+      businessUnit: 'Compliance',
+      geography: '',
+      brief: 'Review Cloud AI Model Services Statement of Work for legal and compliance contract review.',
+      activeQuestion: staleQuestion,
+      questions: [staleQuestion],
+      askedQuestions: [staleQuestion],
+      documents: [{
+        evidenceId: 'SOW-01',
+        title: 'Cloud AI Model Services Statement Of Work',
+        extractionStatus: 'backend_parsed',
+        signals: ['responsible-ai', 'privacy', 'security monitoring']
+      }],
+      evidenceSignals: ['contract document', 'responsible-ai', 'privacy', 'security monitoring'],
+      riskSignals: ['AI/model use', 'personal data', 'cloud security', 'human oversight']
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.equal(result.caseDraft.answerValidation?.status, undefined);
+  assert.equal(result.caseDraft.businessUnit, 'Compliance');
+  assert.equal(result.caseDraft.reviewFocus, 'all listed review areas');
+  assert.equal(result.caseDraft.recentlyAnsweredFields.review_focus > 0, true);
+  assert.doesNotMatch(result.reply, /could not map/i);
+  assert.ok(!result.questions.some((question) => /focus primarily|equally in-scope/i.test(question)));
+});
+
+test('conversation maps hosting answer from full assistant prose when displayed question metadata is absent', () => {
+  const assistantText = 'To go deeper on privacy and retention, the next useful step would be to confirm: does Aster host this as a multi-tenant cloud service, or will it run in a dedicated/private environment for your organization?';
+  const staleQuestion = 'Which area do you want to prioritize in the review?';
+  const result = processConversation({
+    message: 'shared saas environment',
+    eventType: 'user_answer',
+    activeQuestion: staleQuestion,
+    history: [
+      { role: 'assistant', text: assistantText },
+      { role: 'user', text: 'shared saas environment', answeringQuestion: staleQuestion }
+    ],
+    caseDraft: {
+      supplierName: 'Aster Cognitive Cloud',
+      businessUnit: 'Compliance',
+      geography: 'UAE and US',
+      brief: 'Review the Cloud AI Model Services SOW for legal and compliance contract review.',
+      activeQuestion: staleQuestion,
+      questions: [staleQuestion],
+      askedQuestions: [staleQuestion],
+      documents: [{
+        evidenceId: 'SOW-01',
+        title: 'Cloud AI Model Services Statement Of Work',
+        extractionStatus: 'backend_parsed',
+        signals: ['model governance', 'responsible-ai']
+      }],
+      evidenceSignals: ['contract document', 'model governance'],
+      riskSignals: ['AI/model use', 'personal data'],
+      aiUsageScope: { audience: 'internal_employees_only' }
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.equal(result.caseDraft.answerValidation?.status, undefined);
+  assert.equal(result.caseDraft.aiUsageScope.audience, 'internal_employees_only');
+  assert.equal(result.caseDraft.aiUsageScope.hostingModel, 'multi_tenant_saas');
+  assert.equal(result.caseDraft.recentlyAnsweredFields.ai_usage_scope, 2);
+  assert.doesNotMatch(result.reply, /could not map/i);
+  assert.ok(!result.questions.some((question) => /multi-tenant cloud service|dedicated\/private environment/i.test(question)));
+});
+
 test('post-council ambiguous geography update asks add or replace before mutating case', () => {
   const result = processConversation({
     message: 'Syria',

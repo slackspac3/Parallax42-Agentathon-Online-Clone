@@ -3269,13 +3269,14 @@ function assistantQuestionFromText(text = '') {
     return chatRunReadiness?.runnable ? 'Should I run the council now?' : 'What else should I know before I run the council?';
   };
   const acceptableQuestion = (value = '') => {
-    const candidate = cleanEvidenceText(value).replace(/^next question:\s*/i, '');
+    const candidate = cleanEvidenceText(value)
+      .replace(/^(?:next(?:\s+(?:best|key|useful|review|follow[- ]?up))*\s+(?:question|clarification|scoping point|step)(?:\s*\([^)]{0,160}\))?|next key scoping point|next key clarification|to go deeper[^:]{0,120}|before i run[^:]{0,120})\s*:?\s*/i, '');
     if (!candidate || candidate.length < 12) return '';
     if (candidate.endsWith('?')) return normalizeAssistantQuestion(candidate);
     if (/^(who|what|which|where|when|how|can|does|do|is|are|should|within)\b/i.test(candidate)) return normalizeAssistantQuestion(`${candidate}?`);
     return '';
   };
-  const nextBlock = raw.split(/Next questions?:/i)[1] || '';
+  const nextBlock = raw.split(/Next(?:\s+(?:best|key|useful|review|follow[- ]?up))*\s+(?:questions?|clarification|scoping point|step)(?:\s*\([^)]{0,160}\))?:?/i)[1] || '';
   const bullet = nextBlock.match(/[-•]\s*([^\n]+)/);
   const bulletQuestion = acceptableQuestion(bullet?.[1]);
   if (bulletQuestion) return bulletQuestion;
