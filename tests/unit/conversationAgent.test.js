@@ -1236,6 +1236,205 @@ test('conversation prevents repeated questions and asks one next best question a
   assert.ok(!result.questions.some((question) => /accountable business unit|workflow owner/i.test(question)));
 });
 
+test('conversation maps terse answers to the latest visible question instead of stale hidden state', () => {
+  const visibleQuestion = 'Could you confirm what types of data you expect to process: personal data, sensitive personal data, confidential business documents, or public/low-sensitivity data?';
+  const staleQuestion = 'Have all parties, end users, destinations, and delivery sites been screened for sanctions, restricted-party, and denied-party concerns?';
+  const result = processConversation({
+    message: 'all of the above',
+    eventType: 'user_answer',
+    activeQuestion: staleQuestion,
+    history: [
+      { role: 'assistant', text: visibleQuestion, displayedQuestion: visibleQuestion },
+      { role: 'user', text: 'all of the above', answeringQuestion: staleQuestion }
+    ],
+    caseDraft: {
+      supplierName: 'Aster Cognitive Cloud',
+      businessUnit: 'IT',
+      geography: 'UAE and US and China',
+      brief: 'Review a cloud AI model services SOW.',
+      activeQuestion: staleQuestion,
+      questions: [staleQuestion],
+      documents: [{ evidenceId: 'SOW-01', title: 'Cloud AI SOW', extractionStatus: 'backend_parsed' }],
+      evidenceSignals: ['contract document'],
+      riskSignals: ['AI/model use'],
+      aiUsageScope: { audience: 'internal_employees' }
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.equal(result.caseDraft.answerValidation?.status, undefined);
+  assert.ok(result.caseDraft.dataCategories.includes('sensitive personal data'));
+  assert.ok(result.caseDraft.dataCategories.includes('confidential business documents'));
+  assert.doesNotMatch(result.reply, /could not map/i);
+});
+
+test('post-council ambiguous geography update asks add or replace before mutating case', () => {
+  const result = processConversation({
+    message: 'Syria',
+    caseDraft: {
+      supplierName: 'Aster Cognitive Cloud',
+      businessUnit: 'IT',
+      geography: 'UAE and US',
+      brief: 'Review a cloud AI model services SOW.',
+      documents: [{ evidenceId: 'SOW-01', title: 'Cloud AI SOW', extractionStatus: 'backend_parsed' }],
+      evidenceSignals: ['contract document'],
+      riskSignals: ['AI/model use'],
+      aiUsageScope: { audience: 'internal_employees' },
+      lastCouncilRun: { ok: true, runId: 'run-v1', decision: 'conditional_approval', caseVersion: 1 },
+      councilStatus: 'current',
+      caseVersion: 1
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.equal(result.caseDraft.geography, 'UAE and US');
+  assert.equal(result.caseDraft.councilStatus, 'pending_update_clarification');
+  assert.equal(result.caseDraft.pendingCaseUpdateClarification.field, 'geography');
+  assert.match(result.reply, /add Syria.*replace/i);
+  assert.doesNotMatch(result.reply, /ran the case/i);
+});
+
+test('post-council explicit geography addition marks prior council output stale and retains evidence', () => {
+  const result = processConversation({
+    message: 'I want to deploy this in Syria as well',
+    caseDraft: {
+      supplierName: 'Aster Cognitive Cloud',
+      businessUnit: 'IT',
+      geography: 'UAE and US',
+      brief: 'Review a cloud AI model services SOW.',
+      documents: [{ evidenceId: 'SOW-01', title: 'Cloud AI SOW', extractionStatus: 'backend_parsed' }],
+      evidenceSignals: ['contract document'],
+      riskSignals: ['AI/model use'],
+      aiUsageScope: { audience: 'internal_employees' },
+      lastCouncilRun: { ok: true, runId: 'run-v1', decision: 'conditional_approval', caseVersion: 1 },
+      councilStatus: 'current',
+      caseVersion: 1
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.equal(result.caseDraft.geography, 'UAE and US and Syria');
+  assert.equal(result.caseDraft.documents.length, 1);
+  assert.equal(result.caseDraft.councilStatus, 'superseded_pending_rerun');
+  assert.equal(result.caseDraft.rerunRecommended, true);
+  assert.ok(result.caseDraft.caseAmendments.some((item) => item.field === 'geography' && /Syria/i.test(item.value)));
+  assert.ok(result.questions.some((question) => /sanctions|restricted-party|denied-party/i.test(question)));
+  assert.ok(!result.questions.some((question) => /end-use certificate/i.test(question)));
+  assert.match(result.reply, /updated the existing case after the prior council run/i);
+});
+
+test('post-council AI scope addition marks prior council output stale without losing existing scope', () => {
+  const result = processConversation({
+    message: 'It will also be used by some third party contractors',
+    caseDraft: {
+      supplierName: 'Aster Cognitive Cloud',
+      businessUnit: 'IT',
+      geography: 'UAE and US',
+      brief: 'Review a cloud AI model services SOW.',
+      documents: [{ evidenceId: 'SOW-01', title: 'Cloud AI SOW', extractionStatus: 'backend_parsed' }],
+      evidenceSignals: ['contract document'],
+      riskSignals: ['AI/model use'],
+      aiUsageScope: { audience: 'internal_employees_only', excludedWorkflows: ['HR matters'] },
+      lastCouncilRun: { ok: true, runId: 'run-v1', decision: 'conditional_approval', caseVersion: 1 },
+      councilStatus: 'current',
+      caseVersion: 1
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.equal(result.caseDraft.aiUsageScope.thirdPartyContractors, true);
+  assert.ok(result.caseDraft.aiUsageScope.excludedWorkflows.includes('HR matters'));
+  assert.equal(result.caseDraft.councilStatus, 'superseded_pending_rerun');
+  assert.ok(result.caseDraft.caseAmendments.some((item) => item.field === 'ai_usage_scope'));
+});
+
+test('post-council ambiguous AI scope update asks whether it is add or replace', () => {
+  const result = processConversation({
+    message: 'external customers',
+    caseDraft: {
+      supplierName: 'Aster Cognitive Cloud',
+      businessUnit: 'IT',
+      geography: 'UAE and US',
+      brief: 'Review a cloud AI model services SOW.',
+      documents: [{ evidenceId: 'SOW-01', title: 'Cloud AI SOW', extractionStatus: 'backend_parsed' }],
+      evidenceSignals: ['contract document'],
+      riskSignals: ['AI/model use'],
+      aiUsageScope: { audience: 'internal_employees_only', excludedWorkflows: ['HR matters'] },
+      lastCouncilRun: { ok: true, runId: 'run-v1', decision: 'conditional_approval', caseVersion: 1 },
+      councilStatus: 'current',
+      caseVersion: 1
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.equal(result.caseDraft.aiUsageScope.audience, 'internal_employees_only');
+  assert.equal(result.caseDraft.councilStatus, 'pending_update_clarification');
+  assert.equal(result.caseDraft.pendingCaseUpdateClarification.field, 'ai_usage_scope');
+  assert.match(result.reply, /add this AI-use scope.*replace/i);
+});
+
+test('post-council rerun keeps existing evidence and clears stale status when council executes', () => {
+  let payloadSeen = null;
+  const result = processConversation({
+    message: 'rerun council',
+    forceRun: true,
+    caseDraft: {
+      supplierName: 'Aster Cognitive Cloud',
+      businessUnit: 'IT',
+      geography: 'UAE and US and Singapore',
+      brief: 'Review a cloud AI model services SOW for internal policy search.',
+      documents: [{ evidenceId: 'SOW-01', title: 'Cloud AI SOW', extractionStatus: 'backend_parsed' }],
+      evidenceSignals: ['contract document', 'DPA'],
+      riskSignals: ['AI/model use'],
+      aiUsageScope: { audience: 'internal_employees', excludedWorkflows: ['HR matters', 'legal determinations'] },
+      lastCouncilRun: { ok: true, runId: 'run-v1', decision: 'conditional_approval', caseVersion: 1 },
+      councilStatus: 'superseded_pending_rerun',
+      rerunRecommended: true,
+      caseAmendments: [{ field: 'geography', value: 'UAE and US and Singapore', updateType: 'addition', materiality: 'high' }],
+      caseVersion: 1
+    }
+  }, {
+    runtime: 'deterministic',
+    runAgentWithRuntime: (payload) => {
+      payloadSeen = payload;
+      return {
+        ok: true,
+        runId: 'run-v2',
+        decision: { recommendation: 'Conditional approval', readinessScore: 0.74 },
+        gaps: [],
+        evidenceIds: ['SOW-01']
+      };
+    }
+  });
+
+  assert.equal(result.run.ok, true);
+  assert.equal(payloadSeen.documents.length, 1);
+  assert.match(payloadSeen.geography, /Singapore/);
+  assert.equal(result.caseDraft.councilStatus, 'current');
+  assert.equal(result.caseDraft.rerunRecommended, false);
+  assert.equal(result.caseDraft.lastCouncilRun.runId, 'run-v2');
+});
+
+test('sanctions-sensitive geography on a cloud AI SOW does not invent export end-use certificate questions', () => {
+  const result = processConversation({
+    message: 'I want to deploy this in Syria as well',
+    caseDraft: {
+      supplierName: 'Aster Cognitive Cloud',
+      businessUnit: 'IT',
+      geography: 'UAE and US and China',
+      brief: 'Review a cloud AI model services SOW for private assistant, retrieval, policy Q&A, meeting summaries, and compliance evidence extraction.',
+      documents: [{ evidenceId: 'SOW-01', title: 'Cloud AI Model Services Statement of Work', extractionStatus: 'backend_parsed' }],
+      evidenceSignals: ['contract document'],
+      riskSignals: ['AI/model use'],
+      aiUsageScope: { audience: 'internal_employees', excludedWorkflows: ['HR matters', 'legal determinations'] },
+      lastCouncilRun: { ok: true, runId: 'run-v1', decision: 'conditional_approval', caseVersion: 1 },
+      councilStatus: 'current',
+      caseVersion: 1
+    }
+  }, { runtime: 'deterministic' });
+
+  assert.ok(result.missingFields.includes('sanctions_screening'));
+  assert.ok(!result.missingFields.includes('export_end_use'));
+  assert.ok(!result.missingFields.includes('export_origin_jurisdiction'));
+  assert.ok(result.questions.some((question) => /sanctions|restricted-party|denied-party/i.test(question)));
+  assert.ok(!result.questions.some((question) => /end-use certificate|controlled item/i.test(question)));
+});
+
 test('server-side conversation enrichment searches indexed evidence before evidence follow-up', async () => {
   const originalFetch = global.fetch;
   const storeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'p42-conversation-pre-question-'));

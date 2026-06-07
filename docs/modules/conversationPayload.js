@@ -64,6 +64,14 @@
     }, {});
   }
 
+  function sanitizeRecordList(values, maxItems, maxLength) {
+    return (Array.isArray(values) ? values : []).map(function sanitize(item) {
+      return sanitizeDictionary(item, maxLength || MAX_SUMMARY_CHARS);
+    }).filter(function hasValue(item) {
+      return Object.keys(item).length;
+    }).slice(0, maxItems || MAX_LIST_ITEMS);
+  }
+
   function firstValue(item, keys) {
     for (const key of keys) {
       if (item && item[key] !== undefined && item[key] !== null && item[key] !== '') return item[key];
@@ -208,16 +216,20 @@
       ['serviceDescription', MAX_BRIEF_CHARS],
       ['activeQuestion', 1000],
       ['currentEventType', 120],
+      ['councilStatus', 120],
+      ['councilStaleReason', MAX_SUMMARY_CHARS],
       ['conversationSummary', MAX_MEMORY_CHARS],
       ['memorySummary', MAX_MEMORY_CHARS]
     ].forEach(function copy(entry) {
       copyString(next, entry[0], draft[entry[0]], entry[1]);
     });
-    ['caseRequestStarted', 'smartIntakeUnavailable', 'smartIntakeDegraded'].forEach(function copy(key) {
+    copyNumber(next, 'caseVersion', draft.caseVersion);
+    ['caseRequestStarted', 'smartIntakeUnavailable', 'smartIntakeDegraded', 'rerunRecommended'].forEach(function copy(key) {
       copyBoolean(next, key, draft[key]);
     });
     [
       ['integrations', 30],
+      ['dataCategories', 30],
       ['evidenceSignals', 60],
       ['riskSignals', 60],
       ['knownGaps', 60],
@@ -228,6 +240,12 @@
       if (values.length) next[entry[0]] = values;
     });
     if (draft.recentlyAnsweredFields) next.recentlyAnsweredFields = sanitizeDictionary(draft.recentlyAnsweredFields, 120);
+    if (draft.lastCouncilRun) next.lastCouncilRun = sanitizeDictionary(draft.lastCouncilRun, MAX_SUMMARY_CHARS);
+    if (draft.pendingCaseUpdateClarification) next.pendingCaseUpdateClarification = sanitizeDictionary(draft.pendingCaseUpdateClarification, MAX_SUMMARY_CHARS);
+    const caseAmendments = sanitizeRecordList(draft.caseAmendments, 32, MAX_SUMMARY_CHARS);
+    const materialChanges = sanitizeRecordList(draft.materialChanges, 32, MAX_SUMMARY_CHARS);
+    if (caseAmendments.length) next.caseAmendments = caseAmendments;
+    if (materialChanges.length) next.materialChanges = materialChanges;
     if (draft.documentContext) next.documentContext = sanitizeDictionary(draft.documentContext, MAX_SUMMARY_CHARS);
     if (draft.llmIntake) next.llmIntake = sanitizeDictionary(draft.llmIntake, MAX_SUMMARY_CHARS);
     if (draft.intakeAssessment) next.intakeAssessment = sanitizeDictionary(draft.intakeAssessment, MAX_SUMMARY_CHARS);

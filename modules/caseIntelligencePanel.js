@@ -93,8 +93,12 @@
 
   function nextBestAction(input) {
     const settings = input || {};
+    const draft = settings.draft || {};
     const result = settings.result || null;
     const readiness = settings.readiness || null;
+    if (draft.councilStatus === 'superseded_pending_rerun' || draft.rerunRecommended) {
+      return 'Rerun council with the updated case facts.';
+    }
     if (result && result.ok) {
       const gaps = Array.isArray(result.gaps) ? result.gaps : [];
       if (gaps.length) return gaps[0].action || 'Assign the blocking gap to a human reviewer.';

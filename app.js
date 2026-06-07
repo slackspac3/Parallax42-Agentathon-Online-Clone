@@ -1287,6 +1287,21 @@ function mergeDraftArray(current = [], next = [], limit = 24) {
   ]).slice(-limit);
 }
 
+function mergeDraftRecords(current = [], next = [], limit = 32) {
+  const byKey = new Map();
+  [...(Array.isArray(current) ? current : []), ...(Array.isArray(next) ? next : [])].forEach((item) => {
+    if (!item || typeof item !== 'object') return;
+    const key = [
+      item.field,
+      item.updateType,
+      item.value,
+      item.reason
+    ].map((value) => cleanEvidenceText(value).toLowerCase()).join('|') || JSON.stringify(item).slice(0, 160);
+    byKey.set(key, { ...(byKey.get(key) || {}), ...item });
+  });
+  return Array.from(byKey.values()).slice(-limit);
+}
+
 function mergeDraftDocuments(current = [], next = [], limit = 18) {
   const byId = new Map();
   [...(Array.isArray(current) ? current : []), ...(Array.isArray(next) ? next : [])].forEach((doc) => {
@@ -1320,6 +1335,7 @@ function mergeChatCaseDraft(patch = {}, options = {}) {
     geography: mergeDraftText(base.geography, patch.geography),
     brief: mergeDraftText(base.brief, patch.brief),
     integrations: mergeDraftArray(base.integrations, patch.integrations, 18),
+    dataCategories: mergeDraftArray(base.dataCategories, patch.dataCategories, 24),
     riskSignals: mergeDraftArray(base.riskSignals, patch.riskSignals, 24),
     evidenceSignals: mergeDraftArray(base.evidenceSignals, patch.evidenceSignals, 32),
     knownGaps: mergeDraftArray(base.knownGaps, patch.knownGaps, 24),
@@ -1328,6 +1344,14 @@ function mergeChatCaseDraft(patch = {}, options = {}) {
     documentContext: mergeDocumentContext(base.documentContext || {}, patch.documentContext || {}),
     questions: mergeDraftArray(base.questions, patch.questions, 24),
     askedQuestions: mergeDraftArray(base.askedQuestions, patch.askedQuestions, 32),
+    caseAmendments: mergeDraftRecords(base.caseAmendments, patch.caseAmendments, 32),
+    materialChanges: mergeDraftRecords(base.materialChanges, patch.materialChanges, 32),
+    lastCouncilRun: Object.prototype.hasOwnProperty.call(patch, 'lastCouncilRun') ? patch.lastCouncilRun : base.lastCouncilRun,
+    pendingCaseUpdateClarification: Object.prototype.hasOwnProperty.call(patch, 'pendingCaseUpdateClarification') ? patch.pendingCaseUpdateClarification : base.pendingCaseUpdateClarification,
+    councilStatus: Object.prototype.hasOwnProperty.call(patch, 'councilStatus') ? patch.councilStatus : base.councilStatus,
+    councilStaleReason: Object.prototype.hasOwnProperty.call(patch, 'councilStaleReason') ? patch.councilStaleReason : base.councilStaleReason,
+    rerunRecommended: Object.prototype.hasOwnProperty.call(patch, 'rerunRecommended') ? Boolean(patch.rerunRecommended) : Boolean(base.rerunRecommended),
+    caseVersion: Number(Object.prototype.hasOwnProperty.call(patch, 'caseVersion') ? patch.caseVersion : base.caseVersion || 0) || 0,
     caseRequestStarted: options.forceCaseRequestStarted === false
       ? false
       : Boolean(base.caseRequestStarted || patch.caseRequestStarted)
@@ -2168,6 +2192,21 @@ function restoreRunFromHistory(runId = '') {
   showCouncilOutput({ allowCaseMismatch: true });
 }
 
+function runSummaryForChatDraft(result = {}) {
+  if (!result || typeof result !== 'object') return null;
+  const existingVersion = Number(chatCaseDraft.lastCouncilRun?.caseVersion || chatCaseDraft.caseVersion || 0);
+  return {
+    ok: Boolean(result.ok),
+    runId: cleanEvidenceText(result.runId || result.id || ''),
+    decision: cleanEvidenceText(result.decision?.recommendation || result.decision?.decision || result.output?.decision || ''),
+    riskLevel: cleanEvidenceText(result.decision?.riskLevel || result.output?.risk_level || ''),
+    completedAt: cleanEvidenceText(result.completedAt || result.timestamp || new Date().toISOString()),
+    caseVersion: existingVersion || 1,
+    evidenceCount: Number((result.evidenceIds || []).length || (result.citations || []).length || chatCaseDraft.documents?.length || 0),
+    amendmentCount: Number(chatCaseDraft.caseAmendments?.length || 0)
+  };
+}
+
 function registerCompletedRun(runMode = activeRunMode, result = null) {
   if (!isCompletedRun(result)) return result;
   const mode = ['demo', 'live', 'chat'].includes(runMode) ? runMode : activeRunMode;
@@ -2176,6 +2215,17 @@ function registerCompletedRun(runMode = activeRunMode, result = null) {
   lastRun = completed;
   latestCompletedRunMode = mode;
   latestCompletedRun = completed;
+  if (mode === 'chat') {
+    const summary = runSummaryForChatDraft(completed);
+    mergeChatCaseDraft({
+      lastCouncilRun: summary,
+      caseVersion: summary?.caseVersion || chatCaseDraft.caseVersion || 0,
+      councilStatus: 'current',
+      councilStaleReason: '',
+      rerunRecommended: false,
+      pendingCaseUpdateClarification: null
+    });
+  }
   return completed;
 }
 
@@ -2846,6 +2896,22 @@ function contextRetainedHtml(draft = chatCaseDraft, indexedChunks = 0) {
   `;
 }
 
+function caseAmendmentNoticeHtml(draft = chatCaseDraft) {
+  if (!draft || draft.councilStatus !== 'superseded_pending_rerun') return '';
+  const changes = Array.isArray(draft.caseAmendments) ? draft.caseAmendments.slice(-3) : [];
+  const changeText = changes.length
+    ? changes.map((item) => `${cleanEvidenceText(item.field).replace(/_/g, ' ')}: ${cleanEvidenceText(item.value)}`).join(' · ')
+    : cleanEvidenceText(draft.councilStaleReason || 'case facts changed');
+  return `
+    <div class="case-amendment-notice" role="status">
+      <span class="eyebrow">Case updated after council</span>
+      <strong>Previous result needs rerun</strong>
+      <p>${escapeHtml(changeText)}</p>
+      <button type="button" data-report-action="run-council">Rerun council</button>
+    </div>
+  `;
+}
+
 function addPreviewSignal(items = [], value = '') {
   const signal = cleanEvidenceText(value);
   if (!signal) return items;
@@ -3086,6 +3152,7 @@ function renderCaseIntelligence(draft = chatCaseDraft, result = lastRuns.chat) {
       <span class="eyebrow">Next best action</span>
       <strong>${escapeHtml(nextBestAction(draft, result))}</strong>
     </div>
+    ${caseAmendmentNoticeHtml(draft)}
     ${contextRetainedHtml(draft, indexedChunks)}
     <details class="intel-detail-pack risk-domain-block">
       <summary><span>Risk signals</span><b>${escapeHtml(risks.length || 0)}</b></summary>
@@ -5800,6 +5867,13 @@ specialistList?.addEventListener('click', (event) => {
 artifactPreview?.addEventListener('click', (event) => {
   const action = event.target?.closest?.('[data-report-action]')?.dataset?.reportAction;
   if (action === 'export-review-pack') execReviewPack?.click();
+});
+
+caseIntelDetails?.addEventListener('click', (event) => {
+  const action = event.target?.closest?.('[data-report-action]')?.dataset?.reportAction;
+  if (action === 'run-council') {
+    submitChatMessage(chatInput.value || 'rerun council', { forceRun: true });
+  }
 });
 
 specialistList?.addEventListener('submit', (event) => {
